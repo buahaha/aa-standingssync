@@ -1,0 +1,46 @@
+{% extends 'syncaltcontacts/base.html' %}
+{% load i18n %}
+{% load humanize %}
+
+{% block details %}
+
+    <div class="panel panel-default">
+        <div class="panel-heading" style="display:flex;">
+            <h3 class="panel-title">{% trans 'Synced alts' %}</h3>
+        </div>
+        <div class="panel-body">            
+            <table class="table" id="tab_syncaltcontacts">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Name</th>
+                        <th>Last Sync</th>             
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alt in alts %}
+                        <tr>
+                            <td class="text-center"><img class="ra-avatar img-circle" src="{{ alt.portrait_url }}">
+                            </td>
+                            <td>{{ alt.name }}</td>
+                            <td>{{ alt.last_sync }}</td>
+                            <td><a class="btn btn-danger" href="{% url 'syncaltcontacts:remove_alt' alt.pk %}" role="button"><span class="fa fa-trash" style="font-size: 120%;"></span></a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>                        
+            </table>
+        </div>
+    </div>
+
+    {% if not has_alliance_char%}
+        <p> Please add an alliance char to activate syncing</p>
+    {% else %}
+        <p> Syncing is ready</p>
+    {% endif %}
+
+    <a class="btn btn-primary" href="{% url 'syncaltcontacts:add_alt' %}">Add Alt</a>
+    <a class="btn btn-default" href="{% url 'syncaltcontacts:add_alliance_character' %}">Add Alliance Token</a>
+    <a class="btn btn-warning" href="{% url 'syncaltcontacts:dummy' %}">Run dummy</a>
+    
+{% endblock %}

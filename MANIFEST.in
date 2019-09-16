@@ -1,0 +1,6 @@
+include LICENSE
+include README.md
+recursive-include syncaltcontacts *.py
+recursive-include syncaltcontacts/static *
+recursive-include syncaltcontacts/templates *
+
