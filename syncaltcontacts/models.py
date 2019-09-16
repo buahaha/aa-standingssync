@@ -9,6 +9,7 @@ class SyncedAlt(models.Model):
         on_delete=models.CASCADE,
         primary_key=True
     )
+    version_hash = models.CharField(max_length=32, null=True, default=None)
     last_sync = models.DateTimeField(null=True, default=None)
 
     def __str__(self):
@@ -22,13 +23,15 @@ class SyncedAlt(models.Model):
         ]
 
 
-class AllianceCharacter(models.Model):
+class AllianceManager(models.Model):
     """The character used for retrieving alliance contacts for syncing"""
     character = models.OneToOneField(
         CharacterOwnership, 
         on_delete=models.CASCADE,
         primary_key=True
     )
+    version_hash = models.CharField(max_length=32, null=True, default=None)
+    last_sync = models.DateTimeField(null=True, default=None)
 
     def __str__(self):
         return self.character.character.character_name

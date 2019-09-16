@@ -14,7 +14,7 @@ from . import tasks
 @permission_required('syncaltcontacts.view_syncaltcontacts')
 def index(request):
     # check if there is an alliance character stored
-    has_alliance_char = AllianceCharacter.objects.first() is not None
+    has_alliance_char = AllianceManager.objects.first() is not None
 
     # get list of synced alts for this user
     alts_query = SyncedAlt.objects.select_related('character__character')
@@ -72,7 +72,7 @@ def remove_alt(request, alt_pk):
 
 @login_required
 @permission_required(('syncaltcontacts.add_alliancecharacter'))
-@token_required(AllianceCharacter.get_esi_scopes())
+@token_required(AllianceManager.get_esi_scopes())
 def add_alliance_character(request, token):
     token_char = EveCharacter.objects.get(character_id=token.character_id)    
     try:
@@ -86,7 +86,7 @@ def add_alliance_character(request, token):
             'Could not find character {}'.format(token_char.character_name)    
         )
     else:
-        AllianceCharacter.objects.get_or_create(character=owned_char)
+        AllianceManager.objects.get_or_create(character=owned_char)
         messages.success(
             request, 
             'Alliance character {} add'.format(token_char.character_name)
@@ -96,5 +96,6 @@ def add_alliance_character(request, token):
 
 @login_required
 def dummy(request):
-    tasks.replace_contacts(4)    
+    #tasks.replace_contacts(4)    
+    tasks.update_alliance_contacts()
     return redirect('syncaltcontacts:index')
