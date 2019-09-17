@@ -110,7 +110,7 @@ def add_alliance_character(request, token):
             alliance=alliance,
             character=owned_char
         )  
-        tasks.sync_manager.delay(sync_manager.pk)
+        tasks.run_manager_sync.delay(sync_manager.pk)
         messages.success(
             request, 
             '{} set as alliance character for {}. '.format(
@@ -162,7 +162,7 @@ def add_alt(request, token):
                 character=owned_char,
                 manager=sync_manager
             )
-            tasks.sync_character.delay(alt.pk)
+            tasks.run_character_sync.delay(alt.pk)
             messages.success(
                 request, 
                 'Sync activated for {}!'.format(token_char.character_name)

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import SyncedCharacter, SyncManager, AllianceContact
-from .tasks import sync_character
+from . import tasks
 
 @admin.register(SyncedCharacter)
 class SyncedCharacterAdmin(admin.ModelAdmin):
@@ -24,7 +24,7 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
                 
         names = list()
         for obj in queryset:            
-            sync_character.delay(sync_char_pk=obj.pk)
+            tasks.run_character_sync.delay(sync_char_pk=obj.pk)
             names.append(str(obj))
     
         self.message_user(
@@ -47,6 +47,8 @@ class SyncManagerAdmin(admin.ModelAdmin):
 
     list_display_links = None
 
+    actions = ['start_sync_managers']
+
     def user(self, obj):
         return obj.character.user
 
@@ -62,3 +64,17 @@ class SyncManagerAdmin(admin.ModelAdmin):
     # This will help you to disbale add functionality
     def has_add_permission(self, request):
         return False
+
+    def start_sync_managers(self, request, queryset):
+                
+        names = list()
+        for obj in queryset:            
+            tasks.run_manager_sync.delay(manager_pk=obj.pk)
+            names.append(str(obj))
+    
+        self.message_user(
+            request, 
+            'Started syncing for: {}'.format(', '.join(names))
+        )
+        
+    start_sync_managers.short_description = "Start sync for managers"

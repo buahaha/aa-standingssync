@@ -21,7 +21,10 @@ class SyncManager(models.Model):
     last_sync = models.DateTimeField(null=True, default=None)
 
     def __str__(self):
-        return self.character.character.character_name
+        return '{} ({})'.format(
+            self.alliance.alliance_name, 
+            self.character.character.character_name
+        )
 
     @staticmethod
     def get_esi_scopes() -> list:

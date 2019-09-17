@@ -1,6 +1,7 @@
 import logging
 import datetime
 import hashlib
+import json
 from celery import shared_task
 from esi.models import Token, TokenExpiredError
 from django.db import transaction
@@ -20,6 +21,10 @@ logger = logging.getLogger(__name__)
 logger = LoggerAdapter(logger, __package__)
 
 
+def makeLoggerTag(tag: str):
+    """creates a function to add logger tags"""
+    return lambda text : '{}: {}'.format(tag, text)
+
 def chunks(lst, size):
     """Yield successive size-sized chunks from lst."""
     for i in range(0, len(lst), size):
@@ -27,7 +32,7 @@ def chunks(lst, size):
 
 
 @shared_task
-def sync_character(sync_char_pk):
+def run_character_sync(sync_char_pk):
     """syncs contacts for one character"""
 
     try:
@@ -38,10 +43,13 @@ def sync_character(sync_char_pk):
                 sync_char_pk
             )
         )
+    addTag = makeLoggerTag(synced_character)
     
     # check if and update is needed
     if synced_character.manager.version_hash == synced_character.version_hash:
-        logger.info('contacts of this char are up-to-date, no sync required')
+        logger.info(addTag(
+            'contacts of this char are up-to-date, no sync required'
+        ))
     else:        
         # get token
         try:
@@ -59,10 +67,7 @@ def sync_character(sync_char_pk):
         
         try:
             # fetching data from ESI
-            logger.info(
-                'Replacing contacts for synced character: {}'.format(
-                    synced_character.character.character.character_name
-            ))
+            logger.info(addTag('Updating contacts with new version'))
             client = token.get_esi_client()
             
             # fetch current contacts
@@ -102,42 +107,55 @@ def sync_character(sync_char_pk):
 
 
 @shared_task
-def sync_manager(manager_pk):
+def run_manager_sync(manager_pk):
     """sync contacts and related characters for one manager"""
 
     try:
         sync_manager = SyncManager.objects.get(pk=manager_pk)
     except SyncManager.DoesNotExist:        
-        raise Exception('task called for not existing manager')
+        raise Exception(
+            'task called for non existing manager with pk {}'.format(manager_pk)
+        )
     else:
+        addTag = makeLoggerTag(sync_manager)
+
         current_version_hash = sync_manager.version_hash
+        alliance_name = sync_manager.alliance.alliance_name
+
+        if sync_manager.character is None:
+            logger.error(addTag(
+                'No character configured to sync alliance contacts.' 
+                + 'Sync on hold'
+            ))
 
         # get token    
-        token = Token.objects.filter(
-            user=sync_manager.character.user, 
-            character_id=sync_manager.character.character.character_id
-        ).require_scopes(SyncManager.get_esi_scopes()).require_valid().first()
-        if token is None:
-            raise RuntimeError("Can not find suitable token for alliance char")
-            logger.error(
-                'Missing valid token for {} to sync alliance standings'.format(
-                    sync_manager.character.character
-                )
-            )
+        try:
+            token = Token.objects.filter(
+                user=sync_manager.character.user, 
+                character_id=sync_manager.character.character.character_id
+            ).require_scopes(
+                SyncManager.get_esi_scopes()
+            ).require_valid().first()
+        except TokenExpiredError:        
+            logger.error(addTag(
+                'Missing valid token to sync alliance contacts'
+            ))
             return
         
         # fetching data from ESI
-        logger.info('Fetching alliance contacts for {} from ESI')
+        logger.info(addTag('Fetching alliance contacts from ESI'))
         client = token.get_esi_client()
         contacts = client.Contacts.get_alliances_alliance_id_contacts(
             alliance_id=sync_manager.character.character.alliance_id
         ).result()
         
         # calc MD5 hash on contacts    
-        new_version_hash = hashlib.md5(str(contacts).encode('utf-8')).hexdigest()
+        new_version_hash = hashlib.md5(
+            json.dumps(contacts).encode('utf-8')
+        ).hexdigest()
 
         if new_version_hash != current_version_hash:
-            logger.info('Storing update to alliance contacts')
+            logger.info(addTag('Storing update to alliance contacts'))
             with transaction.atomic():
                 AllianceContact.objects.all().delete()
                 for contact in contacts:
@@ -153,16 +171,18 @@ def sync_manager(manager_pk):
                 )
                 sync_manager.save()
         else:
-            logger.info('No update to alliance contacts')
+            logger.info(addTag('Alliance contacts are unchanged.'))
         
         # dispatch tasks for characters that need syncing
-        alts_need_syncing = SyncedCharacter.objects.exclude(version_hash=new_version_hash)
+        alts_need_syncing = SyncedCharacter.objects.exclude(
+            version_hash=new_version_hash
+        )
         for character in alts_need_syncing:
-            sync_character.delay(character.pk)
+            run_character_sync.delay(character.pk)
 
 
 @shared_task
-def sync_all():
+def run_sync_all():
     """syncs all managers and related characters if needed"""        
     for sync_manager in SyncManager.objects.all():
         sync_manager.delay(sync_manager.pk)
