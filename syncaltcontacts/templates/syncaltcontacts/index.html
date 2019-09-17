@@ -19,17 +19,17 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for alt in alts %}
-                            {% if alt.has_error %}                                    
+                        {% for character in characters %}
+                            {% if character.has_error %}                                    
                                 <tr class="danger">
                             {% else %}
                                 <tr>    
                             {% endif %}                            
-                                <td class="text-center"><img class="ra-avatar img-circle" src="{{ alt.portrait_url }}">
+                                <td class="text-center"><img class="ra-avatar img-circle" src="{{ character.portrait_url }}">
                                 </td>
-                                <td>{{ alt.name }}</td>
-                                <td>{{ alt.last_error_msg }}</td>
-                                <td><a class="btn btn-warning" href="{% url 'syncaltcontacts:remove_alt' alt.pk %}" role="button">
+                                <td>{{ character.name }}</td>
+                                <td>{{ character.last_error_msg }}</td>
+                                <td><a class="btn btn-warning" href="{% url 'syncaltcontacts:remove_alt' character.pk %}" role="button">
                                     <span class="fa fa-trash" style="font-size: 120%;"></span>
                                 </a></td>
                             </tr>

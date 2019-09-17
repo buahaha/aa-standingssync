@@ -2,8 +2,8 @@ from django.db import models
 from allianceauth.authentication.models import CharacterOwnership
 
 
-class SyncedAlt(models.Model):    
-    """A character that has his contacts synced with alliance"""
+class SyncedCharacter(models.Model):    
+    """A character that has his personal contacts synced with alliance"""
     
     ERROR_NONE = 0
     ERROR_TOKEN_INVALID = 1
@@ -43,7 +43,7 @@ class SyncedAlt(models.Model):
 
 
 class AllianceManager(models.Model):
-    """The character used for retrieving alliance contacts for syncing"""
+    """The character used to fetch alliance contacts and sync status infos"""
     character = models.OneToOneField(
         CharacterOwnership, 
         on_delete=models.CASCADE,

@@ -1,9 +1,9 @@
 from django.contrib import admin
-from .models import SyncedAlt, AllianceManager
-from .tasks import sync_contacts
+from .models import SyncedCharacter, AllianceManager
+from .tasks import sync_character
 
-@admin.register(SyncedAlt)
-class SyncedAltAdmin(admin.ModelAdmin):
+@admin.register(SyncedCharacter)
+class SyncedCharacterAdmin(admin.ModelAdmin):
     list_display = ('user', 'alt_character', 'version_hash', 'last_sync', 'last_error')
     list_filter = ('last_error', 'version_hash', 'last_sync', 'character__user')
     actions = ['start_sync_contacts']
@@ -22,7 +22,7 @@ class SyncedAltAdmin(admin.ModelAdmin):
                 
         names = list()
         for obj in queryset:            
-            sync_contacts.delay(sync_alt_pk=obj.pk)
+            sync_character.delay(sync_char_pk=obj.pk)
             names.append(str(obj))
     
         self.message_user(
