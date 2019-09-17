@@ -4,23 +4,42 @@ from allianceauth.authentication.models import CharacterOwnership
 
 class SyncedAlt(models.Model):    
     """A character that has his contacts synced with alliance"""
+    
+    ERROR_NONE = 0
+    ERROR_TOKEN_INVALID = 1
+    ERROR_UNKNOWN = 99
+
+    ERRORS_LIST = [
+        (ERROR_NONE, 'No error'),
+        (ERROR_TOKEN_INVALID, 'Invalid token'),
+        (ERROR_UNKNOWN, 'Unknown error'),
+    ]
+        
     character = models.OneToOneField(
         CharacterOwnership, 
         on_delete=models.CASCADE,
         primary_key=True
     )
     version_hash = models.CharField(max_length=32, null=True, default=None)
+    last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
     last_sync = models.DateTimeField(null=True, default=None)
+
 
     def __str__(self):
         return self.character.character.character_name
 
+
+    def get_last_error_message(self):
+        return self.ERRORS_LIST[self.last_error][1]
+
+        
     @staticmethod
     def get_esi_scopes() -> list:
         return [
             'esi-characters.read_contacts.v1', 
             'esi-characters.write_contacts.v1'
         ]
+    
 
 
 class AllianceManager(models.Model):

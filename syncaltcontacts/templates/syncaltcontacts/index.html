@@ -2,36 +2,43 @@
 {% load i18n %}
 {% load humanize %}
 
-{% block details %}
-    <p>Add your non-alliance characters below to enable syncing of alliance contacts to your characters. This will allow them to use current alliance standings.</p>
+{% block details %}    
     <div class="panel panel-default">
         <div class="panel-heading" style="display:flex;">
-            <h3 class="panel-title">{% trans 'Your Synced Alts' %}</h3>
+            <h3 class="panel-title">{% trans 'Your Synced Characters' %}</h3>
         </div>
         <div class="panel-body">            
-            <table class="table" id="tab_syncaltcontacts">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>Name</th>
-                        <th>Last Sync</th>             
-                        <th>Turn off</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for alt in alts %}
+            {% if has_synced_chars %}
+                <table class="table" id="tab_syncaltcontacts">
+                    <thead>                        
                         <tr>
-                            <td class="text-center"><img class="ra-avatar img-circle" src="{{ alt.portrait_url }}">
-                            </td>
-                            <td>{{ alt.name }}</td>
-                            <td>{{ alt.last_sync }}</td>
-                            <td><a class="btn btn-danger" href="{% url 'syncaltcontacts:remove_alt' alt.pk %}" role="button">
-                                <span class="fa fa-trash" style="font-size: 120%;"></span>
-                            </a></td>
+                            <th></th>
+                            <th>Name</th>
+                            <th>Status</th>             
+                            <th>Remove from Sync</th>
                         </tr>
-                    {% endfor %}
-                </tbody>                        
-            </table>
+                    </thead>
+                    <tbody>
+                        {% for alt in alts %}
+                            {% if alt.has_error %}                                    
+                                <tr class="danger">
+                            {% else %}
+                                <tr>    
+                            {% endif %}                            
+                                <td class="text-center"><img class="ra-avatar img-circle" src="{{ alt.portrait_url }}">
+                                </td>
+                                <td>{{ alt.name }}</td>
+                                <td>{{ alt.last_error_msg }}</td>
+                                <td><a class="btn btn-warning" href="{% url 'syncaltcontacts:remove_alt' alt.pk %}" role="button">
+                                    <span class="fa fa-trash" style="font-size: 120%;"></span>
+                                </a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>                        
+                </table>
+            {% else %}
+                <p>None</p>
+            {% endif %}
         </div>
     </div>
 
@@ -39,11 +46,18 @@
         <p class="text-warning">Warning - The syncing service is currently not running. Admin needs to add an alliance token to activate.</p>
     {% endif %}
 
-    <p>Important! You will loose all current contacts on your character when adding it to this service.</p>
-    <a class="btn btn-warning" href="{% url 'syncaltcontacts:add_alt' %}">Add Alt to Sync</a>
+    <a class="btn btn-warning" href="{% url 'syncaltcontacts:add_alt' %}">Add Character to Sync</a>
     
     {% if perms.syncaltcontacts.add_alliancecharacter %}
         <a class="btn btn-default" href="{% url 'syncaltcontacts:add_alliance_character' %}">Add Alliance Character</a>
     {% endif %}
+
+    <div class="bs-callout bs-callout-warning">
+        <h4>Read Me First</h4>
+        <p>This service enables you to have the current alliance standings on your non-alliance character. 
+            Once activate it will automatically replace the personal contacts of your character with 
+            the current Alliance contacts and will continue to do so until deactivated.</p>
+            <p><strong>Careful!</strong> You will loose all your personal contacts on your synced character, so use with care.</p>
+    </div>
         
 {% endblock %}

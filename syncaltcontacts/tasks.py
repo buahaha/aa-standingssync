@@ -2,7 +2,7 @@ import logging
 import datetime
 import hashlib
 from celery import shared_task
-from esi.models import Token
+from esi.models import Token, TokenExpiredError
 from django.db import transaction
 from .models import *
 
@@ -26,7 +26,8 @@ def run_regular_sync():
         
     alliance_manager = AllianceManager.objects.first()
     if alliance_manager is None:
-        raise RuntimeError("Missing alliance manager")
+        logger.warn('No alliance manager found. Can not proceed with sync')
+        return
     
     current_version_hash = alliance_manager.version_hash
 
@@ -37,6 +38,12 @@ def run_regular_sync():
     ).require_scopes(AllianceManager.get_esi_scopes()).require_valid().first()
     if token is None:
         raise RuntimeError("Can not find suitable token for alliance char")
+        logger.error(
+            'Missing valid token for {} to sync alliance standings'.format(
+                alliance_manager.character.character
+            )
+        )
+        return
     
     # fetching data from ESI
     logger.info('Fetching alliance contacts from ESI')
@@ -49,7 +56,7 @@ def run_regular_sync():
     new_version_hash = hashlib.md5(str(contacts).encode('utf-8')).hexdigest()
 
     if new_version_hash != current_version_hash:
-        logger.info('Storing update to alliance contacts in DB')
+        logger.info('Storing update to alliance contacts')
         with transaction.atomic():
             AllianceContact.objects.all().delete()
             for contact in contacts:
@@ -63,11 +70,14 @@ def run_regular_sync():
                 datetime.timezone.utc
             )
             alliance_manager.save()
+    else:
+        logger.info('No update to alliance contacts')
     
     # dispatch tasks for alts that need syncing
     alts_need_syncing = SyncedAlt.objects.exclude(version_hash=new_version_hash)
     for alt in alts_need_syncing:
         sync_contacts.delay(alt.pk)
+
 
 def chunks(lst, size):
     """Yield successive size-sized chunks from lst."""
@@ -81,59 +91,77 @@ def sync_contacts(sync_alt_pk):
 
     alliance_manager = AllianceManager.objects.first()
     if alliance_manager is None:
-        raise RuntimeError("Missing alliance manager")
+        logger.error(
+            'No alliance manager configured. Can not proceed with syncing'
+        )
 
    # get token owner
     try:
         synced_alt = SyncedAlt.objects.get(pk=sync_alt_pk)
     except SyncedAlt.DoesNotExist:
-        raise RuntimeError("Missing synced alt")
+        raise RuntimeError(
+            "Can not requested character for syncing with pk {}".format(
+                sync_alt_pk
+            )
+        )
     
     # check if contacts have changed
     if alliance_manager.version_hash == synced_alt.version_hash:
-        logger.info('contacts are up-to-date no need to replace')
+        logger.info('contacts of this char are up-to-date, no sync required')
     else:        
         # get token
-        token = Token.objects.filter(
-            user=synced_alt.character.user, 
-            character_id=synced_alt.character.character.character_id
-        ).require_scopes(SyncedAlt.get_esi_scopes()).require_valid().first()
+        try:
+            token = Token.objects.filter(
+                user=synced_alt.character.user, 
+                character_id=synced_alt.character.character.character_id
+            ).require_scopes(SyncedAlt.get_esi_scopes()).require_valid().first()
+        except TokenExpiredError:
+            sync_alt_pk.last_error = SyncedAlt.ERROR_TOKEN_INVALID
+            sync_alt_pk.save()
+            return
+        
         if token is None:
-            raise RuntimeError("Can not find suitable token for alliance char")
+            raise RuntimeError('Can not find suitable token for alliance char')
         
-        # fetching data from ESI
-        logger.info(
-            'Replacing contacts for synced alt: {}'.format(
-                synced_alt.character.character.character_name
-        ))
-        client = token.get_esi_client()
-        
-        # fetch current contacts
-        contacts = client.Contacts.get_characters_character_id_contacts(
-            character_id=synced_alt.character.character.character_id
-        ).result()
-
-        # delete all current contacts via ESI
-        max_items = 10
-        contact_ids_chunks = chunks([x['contact_id'] for x in contacts], max_items)
-        for contact_ids_chunk in contact_ids_chunks:
-            response = client.Contacts.delete_characters_character_id_contacts(
-                character_id=synced_alt.character.character.character_id,
-                contact_ids=contact_ids_chunk
+        try:
+            # fetching data from ESI
+            logger.info(
+                'Replacing contacts for synced alt: {}'.format(
+                    synced_alt.character.character.character_name
+            ))
+            client = token.get_esi_client()
+            
+            # fetch current contacts
+            contacts = client.Contacts.get_characters_character_id_contacts(
+                character_id=synced_alt.character.character.character_id
             ).result()
-        
-        # write alliance contacts to ESI
-        for contact in AllianceContact.objects.all():
-            response = client.Contacts.post_characters_character_id_contacts(
-                character_id=synced_alt.character.character.character_id,
-                contact_ids=[contact.contact_id],
-                standing=contact.standing
-            ).result()    
 
-        # store updated version hash with alt
-        synced_alt.version_hash = alliance_manager.version_hash
-        synced_alt.last_sync = datetime.datetime.now(
-            datetime.timezone.utc
-        )
-        synced_alt.save()
+            # delete all current contacts via ESI
+            max_items = 10
+            contact_ids_chunks = chunks([x['contact_id'] for x in contacts], max_items)
+            for contact_ids_chunk in contact_ids_chunks:
+                response = client.Contacts.delete_characters_character_id_contacts(
+                    character_id=synced_alt.character.character.character_id,
+                    contact_ids=contact_ids_chunk
+                ).result()
+            
+            # write alliance contacts to ESI
+            for contact in AllianceContact.objects.all():
+                response = client.Contacts.post_characters_character_id_contacts(
+                    character_id=synced_alt.character.character.character_id,
+                    contact_ids=[contact.contact_id],
+                    standing=contact.standing
+                ).result()    
+
+            # store updated version hash with alt
+            synced_alt.version_hash = alliance_manager.version_hash
+            synced_alt.last_sync = datetime.datetime.now(
+                datetime.timezone.utc
+            )
+            synced_alt.last_error = SyncedAlt.ERROR_NONE
+            synced_alt.save()
         
+        except Exception:
+            sync_alt_pk.last_error = SyncedAlt.ERROR_UNKNOWN
+            sync_alt_pk.save()
+            return

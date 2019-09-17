@@ -4,8 +4,8 @@ from .tasks import sync_contacts
 
 @admin.register(SyncedAlt)
 class SyncedAltAdmin(admin.ModelAdmin):
-    list_display = ('user', 'alt_character', 'version_hash', 'last_sync')
-    list_filter = ('version_hash', 'last_sync', 'character__user')
+    list_display = ('user', 'alt_character', 'version_hash', 'last_sync', 'last_error')
+    list_filter = ('last_error', 'version_hash', 'last_sync', 'character__user')
     actions = ['start_sync_contacts']
 
     def user(self, obj):

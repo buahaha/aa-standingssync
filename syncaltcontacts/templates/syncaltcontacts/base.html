@@ -1,11 +1,21 @@
 {% extends 'allianceauth/base.html' %}
 {% load i18n %}
-{% block page_title %}{% trans "Sync Alts" %}{% endblock %}
+{% load static %}
+
+{% block page_title %}{% trans "Standings Sync" %}{% endblock %}
 {% block content %}
     <div class="col-lg-12">
-        <h1 class="page-header text-center">{% trans "Sync Alts" %}</h1>
+        <h1 class="page-header text-center">{% trans "Sync of Alliance Standings" %}</h1>
         <div class="col-lg-10 col-lg-offset-1 container">            
             {% block details %}{% endblock %}
         </div>
     </div>
+{% endblock %}
+
+{% block extra_css %}
+    <link 
+        href="{% static "syncaltcontacts/base.css" %}" 
+        type="text/css" 
+        rel="stylesheet"
+    >
 {% endblock %}

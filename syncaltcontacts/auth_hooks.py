@@ -10,7 +10,7 @@ class syncaltcontactsMenuItem(MenuItemHook):
         # setup menu entry for sidebar
         MenuItemHook.__init__(
             self,
-            _('Sync Alts'),
+            _('Standings Sync'),
             'fa fa-address-card fa-fw',
             'syncaltcontacts:index',
             navactive=['syncaltcontacts:index']

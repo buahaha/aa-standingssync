@@ -1,3 +1,4 @@
+import datetime
 from django.shortcuts import render, redirect, HttpResponse
 from django.template import loader
 from django.urls import reverse
@@ -13,24 +14,30 @@ from . import tasks
 
 @login_required
 @permission_required('syncaltcontacts.add_syncedalt')
-def index(request):
-    # check if there is an alliance character stored
+def index(request):    
     has_alliance_char = AllianceManager.objects.first() is not None
 
     # get list of synced alts for this user
-    alts_query = SyncedAlt.objects.select_related('character__character')
+    alts_query = SyncedAlt.objects.select_related(
+        'character__character'
+    ).filter(character__user=request.user)
+
+    has_synced_chars = alts_query.count() > 0
 
     alts = list()
-    for alt in alts_query:                
+    for alt in alts_query:                        
+
         alts.append({
             'portrait_url': alt.character.character.portrait_url,
             'name': alt.character.character.character_name,
-            'last_sync': alt.last_sync,
+            'last_error_msg': alt.get_last_error_message(),
+            'has_error': alt.last_error != SyncedAlt.ERROR_NONE,
             'pk': alt.pk
         })
     
     context = {
         'alts': alts,
+        'has_synced_chars' : has_synced_chars,
         'has_alliance_char' : has_alliance_char
     }        
     return render(request, 'syncaltcontacts/index.html', context)
