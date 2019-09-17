@@ -13,7 +13,7 @@ from . import tasks
 
 
 @login_required
-@permission_required('syncaltcontacts.add_syncedalt')
+@permission_required('standingssync.add_syncedcharacter')
 def index(request):    
     has_alliance_char = AllianceManager.objects.first() is not None
 
@@ -40,11 +40,11 @@ def index(request):
         'has_synced_chars' : has_synced_chars,
         'has_alliance_char' : has_alliance_char
     }        
-    return render(request, 'syncaltcontacts/index.html', context)
+    return render(request, 'standingssync/index.html', context)
 
 
 @login_required
-@permission_required('syncaltcontacts.add_syncedalt')
+@permission_required('standingssync.add_syncedcharacter')
 @token_required(scopes=settings.LOGIN_TOKEN_SCOPES + SyncedCharacter.get_esi_scopes())
 def add_alt(request, token):
     alliance_manager = AllianceManager.objects.first()
@@ -76,11 +76,11 @@ def add_alt(request, token):
                 request, 
                 'Sync activated for {}!'.format(token_char.character_name)
             )    
-    return redirect('syncaltcontacts:index')
+    return redirect('standingssync:index')
 
 
 @login_required
-@permission_required('syncaltcontacts.add_syncedalt')
+@permission_required('standingssync.add_syncedcharacter')
 def remove_alt(request, alt_pk):
     alt = SyncedCharacter.objects.get(pk=alt_pk)
     alt_name = alt.character.character.character_name
@@ -89,11 +89,11 @@ def remove_alt(request, alt_pk):
             request, 
             'Sync deactivated for {}'.format(alt_name)
     )    
-    return redirect('syncaltcontacts:index')
+    return redirect('standingssync:index')
 
 
 @login_required
-@permission_required('syncaltcontacts.add_alliancecharacter')
+@permission_required('standingssync.add_alliancecharacter')
 @token_required(AllianceManager.get_esi_scopes())
 def add_alliance_character(request, token):
     
@@ -110,14 +110,11 @@ def add_alliance_character(request, token):
             'Could not find character {}'.format(token_char.character_name)    
         )
     else:
-        AllianceManager.objects.get_or_create(character=owned_char)
-        messages.success(
-            request, 
-            'Alliance character {} add'.format(token_char.character_name)
-        )
+        character, created = AllianceManager.objects.get_or_create(character=owned_char)        
         tasks.run_regular_sync.delay()
         messages.success(
             request, 
-            'Started sync of alliance contacts and characters'
+            '{} set as alliance character. '.format(character)
+            + 'Started syncing of alliance contacts.'
         )
-    return redirect('syncaltcontacts:index')
+    return redirect('standingssync:index')

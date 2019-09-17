@@ -4,14 +4,14 @@ from .tasks import sync_character
 
 @admin.register(SyncedCharacter)
 class SyncedCharacterAdmin(admin.ModelAdmin):
-    list_display = ('user', 'alt_character', 'version_hash', 'last_sync', 'last_error')
+    list_display = ('user', 'character_name', 'version_hash', 'last_sync', 'last_error')
     list_filter = ('last_error', 'version_hash', 'last_sync', 'character__user')
     actions = ['start_sync_contacts']
-
+    
     def user(self, obj):
         return obj.character.user
 
-    def alt_character(self, obj):
+    def character_name(self, obj):
         return obj.__str__()
 
     # This will help you to disbale add functionality
@@ -30,7 +30,7 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
             'Started syncing for: {}'.format(', '.join(names))
         )
         
-    start_sync_contacts.short_description = "Start sync for alt"
+    start_sync_contacts.short_description = "Start sync for character"
 
 @admin.register(AllianceManager)
 class AllianceManagerAdmin(admin.ModelAdmin):

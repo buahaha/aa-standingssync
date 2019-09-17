@@ -1,7 +1,7 @@
 from django.conf.urls import url
 from . import views
 
-app_name = 'syncaltcontacts'
+app_name = 'standingssync'
 
 urlpatterns = [
     url(r'^$', views.index, name='index'),

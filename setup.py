@@ -1,6 +1,6 @@
 import os 
 from setuptools import find_packages, setup
-from syncaltcontacts import __version__
+from standingssync import __version__
 
 # read the contents of your README file
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -11,15 +11,15 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
-    name='aa-syncaltcontacts',
-    version='0.1.0',
+    name='aa-standingssync',
+    version=__version__,
     packages=find_packages(),
     include_package_data=True,
     license='MIT',
-    description='Syncing of alt contacts - plugin for for Alliance Auth',
+    description='Standing sync for non-alliance characters - plugin for for Alliance Auth',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://gitlab.com/ErikKalkoken/aa-syncaltcontacts',
+    url='https://gitlab.com/ErikKalkoken/aa-standingssync',
     author='Erik Kalkoken',
     author_email='erik.kalkoken@gmail.com',
     classifiers=[
