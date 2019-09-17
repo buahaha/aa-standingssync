@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SyncedCharacter, AllianceManager
+from .models import SyncedCharacter, SyncManager
 from .tasks import sync_character
 
 @admin.register(SyncedCharacter)
@@ -32,8 +32,8 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
         
     start_sync_contacts.short_description = "Start sync for character"
 
-@admin.register(AllianceManager)
-class AllianceManagerAdmin(admin.ModelAdmin):
+@admin.register(SyncManager)
+class SyncManagerAdmin(admin.ModelAdmin):
     list_display = ('user', 'character_name', 'alliance_name', 'version_hash', 'last_sync')
 
     def user(self, obj):

@@ -3,6 +3,19 @@
 {% load humanize %}
 
 {% block details %}    
+
+    <div class="panel panel-default">
+        <div class="panel-heading" style="display:flex;">
+            <h3 class="panel-title">{% trans 'Available alliance for Sync' %}</h3>
+        </div>
+        <div class="panel-body">            
+            {% if alliance != None %}
+                {{ alliance.alliance_name }}
+            {% else %}
+                None
+            {% endif %}
+        </div>
+    </div>
     <div class="panel panel-default">
         <div class="panel-heading" style="display:flex;">
             <h3 class="panel-title">{% trans 'Your Synced Characters' %}</h3>
