@@ -17,7 +17,7 @@ class syncaltcontactsMenuItem(MenuItemHook):
         )
 
     def render(self, request):
-        if request.user.has_perm('syncaltcontacts.syncaltcontacts'):
+        if request.user.has_perm('syncaltcontacts.add_syncedalt'):
             return MenuItemHook.render(self, request)
         return ''
 

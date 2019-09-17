@@ -3,10 +3,10 @@
 {% load humanize %}
 
 {% block details %}
-
+    <p>Add your non-alliance characters below to enable syncing of alliance contacts to your characters. This will allow them to use current alliance standings.</p>
     <div class="panel panel-default">
         <div class="panel-heading" style="display:flex;">
-            <h3 class="panel-title">{% trans 'Synced alts' %}</h3>
+            <h3 class="panel-title">{% trans 'Your Synced Alts' %}</h3>
         </div>
         <div class="panel-body">            
             <table class="table" id="tab_syncaltcontacts">
@@ -15,7 +15,7 @@
                         <th></th>
                         <th>Name</th>
                         <th>Last Sync</th>             
-                        <th></th>
+                        <th>Turn off</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -25,7 +25,9 @@
                             </td>
                             <td>{{ alt.name }}</td>
                             <td>{{ alt.last_sync }}</td>
-                            <td><a class="btn btn-danger" href="{% url 'syncaltcontacts:remove_alt' alt.pk %}" role="button"><span class="fa fa-trash" style="font-size: 120%;"></span></a></td>
+                            <td><a class="btn btn-danger" href="{% url 'syncaltcontacts:remove_alt' alt.pk %}" role="button">
+                                <span class="fa fa-trash" style="font-size: 120%;"></span>
+                            </a></td>
                         </tr>
                     {% endfor %}
                 </tbody>                        
@@ -34,13 +36,14 @@
     </div>
 
     {% if not has_alliance_char%}
-        <p> Please add an alliance char to activate syncing</p>
-    {% else %}
-        <p> Syncing is ready</p>
+        <p class="text-warning">Warning - The syncing service is currently not running. Admin needs to add an alliance token to activate.</p>
     {% endif %}
 
-    <a class="btn btn-primary" href="{% url 'syncaltcontacts:add_alt' %}">Add Alt</a>
-    <a class="btn btn-default" href="{% url 'syncaltcontacts:add_alliance_character' %}">Add Alliance Token</a>
-    <a class="btn btn-warning" href="{% url 'syncaltcontacts:dummy' %}">Run dummy</a>
+    <p>Important! You will loose all current contacts on your character when adding it to this service.</p>
+    <a class="btn btn-warning" href="{% url 'syncaltcontacts:add_alt' %}">Add Alt to Sync</a>
     
+    {% if perms.syncaltcontacts.add_alliancecharacter %}
+        <a class="btn btn-default" href="{% url 'syncaltcontacts:add_alliance_character' %}">Add Alliance Character</a>
+    {% endif %}
+        
 {% endblock %}

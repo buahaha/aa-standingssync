@@ -10,8 +10,9 @@ from esi.decorators import token_required
 from .models import *
 from . import tasks
 
+
 @login_required
-@permission_required('syncaltcontacts.view_syncaltcontacts')
+@permission_required('syncaltcontacts.add_syncedalt')
 def index(request):
     # check if there is an alliance character stored
     has_alliance_char = AllianceManager.objects.first() is not None
@@ -34,32 +35,45 @@ def index(request):
     }        
     return render(request, 'syncaltcontacts/index.html', context)
 
+
 @login_required
-@permission_required(('syncaltcontacts.add_syncaltcontacts'))
+@permission_required('syncaltcontacts.add_syncedalt')
 @token_required(scopes=settings.LOGIN_TOKEN_SCOPES + SyncedAlt.get_esi_scopes())
 def add_alt(request, token):
-    token_char = EveCharacter.objects.get(character_id=token.character_id)    
-    try:
-        owned_char = CharacterOwnership.objects.get(
-            user=request.user,
-            character=token_char
-        )
-    except CharacterOwnership.DoesNotExist:
+    alliance_manager = AllianceManager.objects.first()
+    if alliance_manager is None:
+        raise RuntimeError("Missing alliance manager")
+    
+    token_char = EveCharacter.objects.get(character_id=token.character_id)
+    if token_char.alliance_id == alliance_manager.character.character.alliance_id:
         messages.warning(
             request,
-            'Could not find character {}'.format(token_char.character_name)    
+            ('Adding alliance members does not make much sense, '
+                + 'since they already have access to alliance contacts.')
         )
-    else:
-        SyncedAlt.objects.get_or_create(character=owned_char)
-        messages.success(
-            request, 
-            'Sync activated for {}!'.format(token_char.character_name)
-        )    
+    else:                
+        try:
+            owned_char = CharacterOwnership.objects.get(
+                user=request.user,
+                character=token_char
+            )
+        except CharacterOwnership.DoesNotExist:
+            messages.warning(
+                request,
+                'Could not find character {}'.format(token_char.character_name)    
+            )
+        else:
+            alt, created = SyncedAlt.objects.get_or_create(character=owned_char)
+            tasks.sync_contacts.delay(alt.pk)
+            messages.success(
+                request, 
+                'Sync activated for {}!'.format(token_char.character_name)
+            )    
     return redirect('syncaltcontacts:index')
 
 
 @login_required
-@permission_required(('syncaltcontacts.add_syncaltcontacts'))
+@permission_required('syncaltcontacts.add_syncedalt')
 def remove_alt(request, alt_pk):
     alt = SyncedAlt.objects.get(pk=alt_pk)
     alt_name = alt.character.character.character_name
@@ -70,11 +84,14 @@ def remove_alt(request, alt_pk):
     )    
     return redirect('syncaltcontacts:index')
 
+
 @login_required
-@permission_required(('syncaltcontacts.add_alliancecharacter'))
+@permission_required('syncaltcontacts.add_alliancecharacter')
 @token_required(AllianceManager.get_esi_scopes())
 def add_alliance_character(request, token):
-    token_char = EveCharacter.objects.get(character_id=token.character_id)    
+    
+    token_char = EveCharacter.objects.get(character_id=token.character_id)
+
     try:
         owned_char = CharacterOwnership.objects.get(
             user=request.user,
@@ -90,12 +107,10 @@ def add_alliance_character(request, token):
         messages.success(
             request, 
             'Alliance character {} add'.format(token_char.character_name)
-        )    
-    return redirect('syncaltcontacts:index')
-
-
-@login_required
-def dummy(request):
-    #tasks.replace_contacts(4)    
-    tasks.update_alliance_contacts()
+        )
+        tasks.run_regular_sync.delay()
+        messages.success(
+            request, 
+            'Started sync of alliance contacts and alts'
+        )
     return redirect('syncaltcontacts:index')

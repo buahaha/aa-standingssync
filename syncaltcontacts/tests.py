@@ -7,4 +7,4 @@ from .models import *
 class TestEvesde(TestCase):
     
     def test_update_contacts(self):    
-        tasks.update_alliance_contacts()
+        tasks.run_regular_sync()

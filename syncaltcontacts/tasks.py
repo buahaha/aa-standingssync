@@ -21,13 +21,15 @@ logger = LoggerAdapter(logger, __package__)
 
 
 @shared_task
-def update_alliance_contacts():
-    """update alliance contacts in local DB"""
+def run_regular_sync():
+    """updates alliance contacts and starts alt syncing if needed"""
         
     alliance_manager = AllianceManager.objects.first()
     if alliance_manager is None:
         raise RuntimeError("Missing alliance manager")
     
+    current_version_hash = alliance_manager.version_hash
+
     # get token    
     token = Token.objects.filter(
         user=alliance_manager.character.user, 
@@ -44,22 +46,28 @@ def update_alliance_contacts():
     ).result()
     
     # calc MD5 hash on contacts    
-    version_hash = hashlib.md5(str(contacts).encode('utf-8')).hexdigest()
+    new_version_hash = hashlib.md5(str(contacts).encode('utf-8')).hexdigest()
 
-    logger.info('Storing alliance contacts in DB')
-    with transaction.atomic():
-        AllianceContact.objects.all().delete()
-        for contact in contacts:
-            AllianceContact.objects.create(
-                contact_id=contact['contact_id'],
-                contact_type=contact['contact_type'],
-                standing=contact['standing'],
+    if new_version_hash != current_version_hash:
+        logger.info('Storing update to alliance contacts in DB')
+        with transaction.atomic():
+            AllianceContact.objects.all().delete()
+            for contact in contacts:
+                AllianceContact.objects.create(
+                    contact_id=contact['contact_id'],
+                    contact_type=contact['contact_type'],
+                    standing=contact['standing'],
+                )
+            alliance_manager.version_hash = new_version_hash
+            alliance_manager.last_sync = datetime.datetime.now(
+                datetime.timezone.utc
             )
-        alliance_manager.version_hash = version_hash
-        alliance_manager.last_sync = datetime.datetime.now(
-            datetime.timezone.utc
-        )
-        alliance_manager.save()
+            alliance_manager.save()
+    
+    # dispatch tasks for alts that need syncing
+    alts_need_syncing = SyncedAlt.objects.exclude(version_hash=new_version_hash)
+    for alt in alts_need_syncing:
+        sync_contacts.delay(alt.pk)
 
 def chunks(lst, size):
     """Yield successive size-sized chunks from lst."""
@@ -68,7 +76,7 @@ def chunks(lst, size):
 
 
 @shared_task
-def replace_contacts(sync_alt_pk):
+def sync_contacts(sync_alt_pk):
     """replaces contacts of a character with the alliance contacts"""
 
     alliance_manager = AllianceManager.objects.first()
