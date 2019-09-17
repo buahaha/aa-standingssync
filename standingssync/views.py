@@ -22,8 +22,11 @@ def index(request):
         alliance = EveAllianceInfo.objects.get(
             alliance_id=request.user.profile.main_character.alliance_id
         )
+        sync_manager = SyncManager.objects.get(alliance=alliance)
     except EveAllianceInfo.DoesNotExist:
-        alliance = None
+        sync_manager = None
+    except SyncManager.DoesNotExist:
+        sync_manager = None
 
     # get list of synced characters for this user
     characters_query = SyncedCharacter.objects.select_related(
@@ -43,12 +46,21 @@ def index(request):
             'pk': character.pk
         })
     
-    context = {
-        'alliance': alliance,
+    context = {        
         'characters': characters,
         'has_synced_chars' : has_synced_chars,
         'has_alliance_char' : has_alliance_char
     }        
+
+    if sync_manager is not None:
+        context['alliance'] = sync_manager.alliance
+        context['alliance_contacts_count'] = AllianceContact.objects.filter(
+            manager=sync_manager
+        ).count()
+    else:
+        context['alliance'] = None
+        context['alliance_contacts_count'] = None
+
     return render(request, 'standingssync/index.html', context)
 
 
@@ -94,15 +106,15 @@ def add_alliance_character(request, token):
             success = False
 
     if success:
-        character, created = SyncManager.objects.get_or_create(                
+        sync_manager, created = SyncManager.objects.get_or_create(                
             alliance=alliance,
             character=owned_char
         )  
-        tasks.run_regular_sync.delay()
+        tasks.sync_manager.delay(sync_manager.pk)
         messages.success(
             request, 
             '{} set as alliance character for {}. '.format(
-                    character, 
+                    sync_manager.character, 
                     alliance.alliance_name
                 )
             + 'Started syncing of alliance contacts.'

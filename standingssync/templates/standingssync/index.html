@@ -10,7 +10,11 @@
         </div>
         <div class="panel-body">            
             {% if alliance != None %}
+                <img class="ra-avatar img-circle" src="{{ alliance.logo_url }}">
+                &nbsp;&nbsp;
                 {{ alliance.alliance_name }}
+                &nbsp;                
+                ({{ alliance_contacts_count }} contacts)
             {% else %}
                 None
             {% endif %}

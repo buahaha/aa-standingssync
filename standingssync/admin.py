@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SyncedCharacter, SyncManager
+from .models import SyncedCharacter, SyncManager, AllianceContact
 from .tasks import sync_character
 
 @admin.register(SyncedCharacter)
@@ -8,6 +8,8 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
     list_filter = ('last_error', 'version_hash', 'last_sync', 'character__user')
     actions = ['start_sync_contacts']
     
+    list_display_links = None
+
     def user(self, obj):
         return obj.character.user
 
@@ -34,7 +36,16 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
 
 @admin.register(SyncManager)
 class SyncManagerAdmin(admin.ModelAdmin):
-    list_display = ('user', 'character_name', 'alliance_name', 'version_hash', 'last_sync')
+    list_display = (
+        'alliance_name', 
+        'contacts_count', 
+        'user', 
+        'character_name',         
+        'version_hash', 
+        'last_sync'
+    )
+
+    list_display_links = None
 
     def user(self, obj):
         return obj.character.user
@@ -44,6 +55,9 @@ class SyncManagerAdmin(admin.ModelAdmin):
 
     def alliance_name(self, obj):
         return obj.character.character.alliance_name
+
+    def contacts_count(self, obj):
+        return AllianceContact.objects.filter(manager=obj).count()
 
     # This will help you to disbale add functionality
     def has_add_permission(self, request):

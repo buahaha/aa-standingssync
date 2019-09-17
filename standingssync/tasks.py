@@ -20,63 +20,6 @@ logger = logging.getLogger(__name__)
 logger = LoggerAdapter(logger, __package__)
 
 
-@shared_task
-def run_regular_sync():
-    """updates contacts for all alliances and starts character syncing if needed"""
-        
-    for sync_manager in SyncManager.objects.all():               
-        
-        current_version_hash = sync_manager.version_hash
-
-        # get token    
-        token = Token.objects.filter(
-            user=sync_manager.character.user, 
-            character_id=sync_manager.character.character.character_id
-        ).require_scopes(SyncManager.get_esi_scopes()).require_valid().first()
-        if token is None:
-            raise RuntimeError("Can not find suitable token for alliance char")
-            logger.error(
-                'Missing valid token for {} to sync alliance standings'.format(
-                    sync_manager.character.character
-                )
-            )
-            return
-        
-        # fetching data from ESI
-        logger.info('Fetching alliance contacts from ESI')
-        client = token.get_esi_client()
-        contacts = client.Contacts.get_alliances_alliance_id_contacts(
-            alliance_id=sync_manager.character.character.alliance_id
-        ).result()
-        
-        # calc MD5 hash on contacts    
-        new_version_hash = hashlib.md5(str(contacts).encode('utf-8')).hexdigest()
-
-        if new_version_hash != current_version_hash:
-            logger.info('Storing update to alliance contacts')
-            with transaction.atomic():
-                AllianceContact.objects.all().delete()
-                for contact in contacts:
-                    AllianceContact.objects.create(
-                        manager=sync_manager,
-                        contact_id=contact['contact_id'],
-                        contact_type=contact['contact_type'],
-                        standing=contact['standing']                        
-                    )
-                sync_manager.version_hash = new_version_hash
-                sync_manager.last_sync = datetime.datetime.now(
-                    datetime.timezone.utc
-                )
-                sync_manager.save()
-        else:
-            logger.info('No update to alliance contacts')
-        
-        # dispatch tasks for characters that need syncing
-        alts_need_syncing = SyncedCharacter.objects.exclude(version_hash=new_version_hash)
-        for character in alts_need_syncing:
-            sync_character.delay(character.pk)
-
-
 def chunks(lst, size):
     """Yield successive size-sized chunks from lst."""
     for i in range(0, len(lst), size):
@@ -87,7 +30,6 @@ def chunks(lst, size):
 def sync_character(sync_char_pk):
     """syncs contacts for one character"""
 
-   # get token owner
     try:
         synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
     except SyncedCharacter.DoesNotExist:
@@ -97,7 +39,7 @@ def sync_character(sync_char_pk):
             )
         )
     
-    # check if contacts have changed
+    # check if and update is needed
     if synced_character.manager.version_hash == synced_character.version_hash:
         logger.info('contacts of this char are up-to-date, no sync required')
     else:        
@@ -157,3 +99,70 @@ def sync_character(sync_char_pk):
             sync_char_pk.last_error = SyncedCharacter.ERROR_UNKNOWN
             sync_char_pk.save()
             return
+
+
+@shared_task
+def sync_manager(manager_pk):
+    """sync contacts and related characters for one manager"""
+
+    try:
+        sync_manager = SyncManager.objects.get(pk=manager_pk)
+    except SyncManager.DoesNotExist:        
+        raise Exception('task called for not existing manager')
+    else:
+        current_version_hash = sync_manager.version_hash
+
+        # get token    
+        token = Token.objects.filter(
+            user=sync_manager.character.user, 
+            character_id=sync_manager.character.character.character_id
+        ).require_scopes(SyncManager.get_esi_scopes()).require_valid().first()
+        if token is None:
+            raise RuntimeError("Can not find suitable token for alliance char")
+            logger.error(
+                'Missing valid token for {} to sync alliance standings'.format(
+                    sync_manager.character.character
+                )
+            )
+            return
+        
+        # fetching data from ESI
+        logger.info('Fetching alliance contacts for {} from ESI')
+        client = token.get_esi_client()
+        contacts = client.Contacts.get_alliances_alliance_id_contacts(
+            alliance_id=sync_manager.character.character.alliance_id
+        ).result()
+        
+        # calc MD5 hash on contacts    
+        new_version_hash = hashlib.md5(str(contacts).encode('utf-8')).hexdigest()
+
+        if new_version_hash != current_version_hash:
+            logger.info('Storing update to alliance contacts')
+            with transaction.atomic():
+                AllianceContact.objects.all().delete()
+                for contact in contacts:
+                    AllianceContact.objects.create(
+                        manager=sync_manager,
+                        contact_id=contact['contact_id'],
+                        contact_type=contact['contact_type'],
+                        standing=contact['standing']                        
+                    )
+                sync_manager.version_hash = new_version_hash
+                sync_manager.last_sync = datetime.datetime.now(
+                    datetime.timezone.utc
+                )
+                sync_manager.save()
+        else:
+            logger.info('No update to alliance contacts')
+        
+        # dispatch tasks for characters that need syncing
+        alts_need_syncing = SyncedCharacter.objects.exclude(version_hash=new_version_hash)
+        for character in alts_need_syncing:
+            sync_character.delay(character.pk)
+
+
+@shared_task
+def sync_all():
+    """syncs all managers and related characters if needed"""        
+    for sync_manager in SyncManager.objects.all():
+        sync_manager.delay(sync_manager.pk)
