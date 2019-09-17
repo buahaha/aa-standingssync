@@ -59,8 +59,11 @@
         </div>
     </div>
 
-    {% if not has_alliance_char%}
-        <p class="text-warning">Warning - This service is not fully setup yet. Please contact an admin for details.</p>
+    {% if alliance == None %}        
+        <div class="bs-callout bs-callout-warning">
+        <h4>Warning</h4>
+        <p>This service is not fully setup yet. Please contact an admin for details.</p>
+        </div>
     {% else %}
         <a class="btn btn-primary" href="{% url 'standingssync:add_alt' %}">Add Character to Sync</a>    
     {% endif %}

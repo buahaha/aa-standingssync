@@ -15,9 +15,7 @@ from . import tasks
 
 @login_required
 @permission_required('standingssync.add_syncedcharacter')
-def index(request):    
-    has_alliance_char = SyncManager.objects.first() is not None
-
+def index(request):        
     try:        
         alliance = EveAllianceInfo.objects.get(
             alliance_id=request.user.profile.main_character.alliance_id
@@ -48,8 +46,7 @@ def index(request):
     
     context = {        
         'characters': characters,
-        'has_synced_chars' : has_synced_chars,
-        'has_alliance_char' : has_alliance_char
+        'has_synced_chars' : has_synced_chars        
     }        
 
     if sync_manager is not None:
