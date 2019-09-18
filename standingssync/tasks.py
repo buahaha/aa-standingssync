@@ -139,7 +139,7 @@ def run_manager_sync(manager_pk, force_sync = False):
     try:
         sync_manager = SyncManager.objects.get(pk=manager_pk)
     except SyncManager.DoesNotExist:        
-        raise Exception(
+        raise SyncManager.DoesNotExist(
             'task called for non existing manager with pk {}'.format(manager_pk)
         )
     else:
@@ -150,9 +150,10 @@ def run_manager_sync(manager_pk, force_sync = False):
 
         if sync_manager.character is None:
             logger.error(addTag(
-                'No character configured to sync alliance contacts.' 
-                + 'Sync on hold'
+                'No character configured to sync alliance contacts. ' 
+                + 'Sync aborted'
             ))
+            return
 
         # get token    
         try:

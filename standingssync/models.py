@@ -23,7 +23,7 @@ class SyncManager(models.Model):
     def __str__(self):
         return '{} ({})'.format(
             self.alliance.alliance_name, 
-            self.character.character.character_name
+            self.character.character.character_name if self.character is not None else 'None'
         )
 
     @staticmethod
@@ -51,10 +51,11 @@ class SyncedCharacter(models.Model):
         on_delete=models.CASCADE,
         primary_key=True
     )
+    manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
     version_hash = models.CharField(max_length=32, null=True, default=None)
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
     last_sync = models.DateTimeField(null=True, default=None)
-    manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
+    
 
     def __str__(self):
         return self.character.character.character_name
