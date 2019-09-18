@@ -36,11 +36,13 @@ class SyncedCharacter(models.Model):
     
     ERROR_NONE = 0
     ERROR_TOKEN_INVALID = 1
+    ERROR_INSUFFICIENT_PERMISSIONS = 2
     ERROR_UNKNOWN = 99
 
     ERRORS_LIST = [
         (ERROR_NONE, 'No error'),
         (ERROR_TOKEN_INVALID, 'Invalid token'),
+        (ERROR_INSUFFICIENT_PERMISSIONS, 'Insufficient permissions'),
         (ERROR_UNKNOWN, 'Unknown error'),
     ]
         
@@ -59,7 +61,8 @@ class SyncedCharacter(models.Model):
 
 
     def get_last_error_message(self):
-        return self.ERRORS_LIST[self.last_error][1]
+        msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
+        return msg[0][1] if len(msg) > 0 else 'Undefined error'
 
         
     @staticmethod

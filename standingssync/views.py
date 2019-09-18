@@ -6,9 +6,8 @@ from django.utils.safestring import mark_safe
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.conf import settings
-from allianceauth.authentication.models import EveCharacter
 from esi.decorators import token_required
-from allianceauth.eveonline.models import EveAllianceInfo
+from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from .models import *
 from . import tasks
 
@@ -62,9 +61,9 @@ def index(request):
 
 
 @login_required
-@permission_required('standingssync.add_alliancecharacter')
+@permission_required('standingssync.add_alliancemanager')
 @token_required(SyncManager.get_esi_scopes())
-def add_alliance_character(request, token):
+def add_alliance_manager(request, token):
     
     success = True
     token_char = EveCharacter.objects.get(character_id=token.character_id)
@@ -96,11 +95,10 @@ def add_alliance_character(request, token):
                 alliance_id=token_char.alliance_id
             )
         except EveAllianceInfo.DoesNotExist:
-            messages.warning(
-                request,                 
-                'Could not find alliance for {}'.format(token_char)
+            alliance = EveAllianceInfo.objects.create_alliance(
+                token_char.alliance_id
             )
-            success = False
+            alliance.save()
 
     if success:
         sync_manager, created = SyncManager.objects.get_or_create(                
@@ -122,7 +120,7 @@ def add_alliance_character(request, token):
 @login_required
 @permission_required('standingssync.add_syncedcharacter')
 @token_required(scopes=settings.LOGIN_TOKEN_SCOPES + SyncedCharacter.get_esi_scopes())
-def add_alt(request, token):
+def add_character(request, token):
     
     try:        
         alliance = EveAllianceInfo.objects.get(
@@ -169,7 +167,7 @@ def add_alt(request, token):
 
 @login_required
 @permission_required('standingssync.add_syncedcharacter')
-def remove_alt(request, alt_pk):
+def remove_character(request, alt_pk):
     alt = SyncedCharacter.objects.get(pk=alt_pk)
     alt_name = alt.character.character.character_name
     alt.delete()
