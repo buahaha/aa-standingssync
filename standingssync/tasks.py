@@ -51,7 +51,7 @@ def run_character_sync(sync_char_pk, force_sync = False):
     try:
         synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
     except SyncedCharacter.DoesNotExist:
-        raise ValueError(
+        raise SyncedCharacter.DoesNotExist(
             "Requested character with pk {} does not exist".format(
                 sync_char_pk
             )
@@ -64,7 +64,7 @@ def run_character_sync(sync_char_pk, force_sync = False):
         ):
         logger.warn('Sync aborted due to insufficient user permissions')
         synced_character.last_error = SyncedCharacter.ERROR_INSUFFICIENT_PERMISSIONS
-        synced_character.save
+        synced_character.save()
         return
 
     # check if an update is needed
@@ -110,7 +110,9 @@ def run_character_sync(sync_char_pk, force_sync = False):
                 ).result()
             
             # write alliance contacts to ESI
-            for contact in AllianceContact.objects.filter(manager=synced_character.manager):
+            for contact in AllianceContact.objects.filter(
+                manager=synced_character.manager
+            ):
                 response = client.Contacts.post_characters_character_id_contacts(
                     character_id=synced_character.character.character.character_id,
                     contact_ids=[contact.contact_id],
@@ -152,6 +154,15 @@ def run_manager_sync(manager_pk, force_sync = False):
             logger.error(addTag(
                 'No character configured to sync alliance contacts. ' 
                 + 'Sync aborted'
+            ))
+            return
+
+        # abort if character does not have sufficient permissions
+        if not sync_manager.character.user.has_perm(
+                'standingssync.add_syncmanager'
+            ):
+            logger.error(addTag(
+                'Character does not have sufficient permission to sync contacts'
             ))
             return
 
@@ -219,4 +230,4 @@ def run_manager_sync(manager_pk, force_sync = False):
 def run_sync_all():
     """syncs all managers and related characters if needed"""        
     for sync_manager in SyncManager.objects.all():
-        sync_manager.delay(sync_manager.pk)
+        run_manager_sync.delay(sync_manager.pk)
