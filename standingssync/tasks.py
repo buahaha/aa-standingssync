@@ -263,7 +263,7 @@ def run_manager_sync(manager_pk, force_sync = False):
 
 
 @shared_task
-def run_sync_all():
+def run_regular_sync():
     """syncs all managers and related characters if needed"""        
     for sync_manager in SyncManager.objects.all():
         run_manager_sync.delay(sync_manager.pk)
