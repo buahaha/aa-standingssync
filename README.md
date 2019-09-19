@@ -2,6 +2,8 @@
 
 This is a plugin app for Alliance Auth. It allows users to have the current alliance standings on their non-alliance characters (e.g. alts).
 
+Current status: **BETA**
+
 ## Features
 
 - Appears as app in the sidebar of AA called "Standings Sync"
