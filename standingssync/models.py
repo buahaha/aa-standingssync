@@ -5,6 +5,25 @@ from allianceauth.eveonline.models import EveAllianceInfo
 
 class SyncManager(models.Model):
     """An object for managing syncing of contacts for an alliance"""
+
+    ERROR_NONE = 0
+    ERROR_TOKEN_INVALID = 1
+    ERROR_TOKEN_EXPIRED = 2
+    ERROR_INSUFFICIENT_PERMISSIONS = 3    
+    ERROR_NO_CHARACTER = 4
+    ERROR_ESI_UNAVAILABLE = 5
+    ERROR_UNKNOWN = 99
+
+    ERRORS_LIST = [
+        (ERROR_NONE, 'No error'),
+        (ERROR_TOKEN_INVALID, 'Invalid token'),
+        (ERROR_TOKEN_EXPIRED, 'Expired token'),
+        (ERROR_INSUFFICIENT_PERMISSIONS, 'Insufficient permissions'),
+        (ERROR_NO_CHARACTER, 'No character set for fetching alliance contacts'),
+        (ERROR_ESI_UNAVAILABLE, 'ESI API is currently unavailable'),
+        (ERROR_UNKNOWN, 'Unknown error'),
+    ]
+
     alliance = models.OneToOneField(
         EveAllianceInfo, 
         on_delete=models.CASCADE,
@@ -17,14 +36,19 @@ class SyncManager(models.Model):
         null=True, 
         default=None
     )
-    version_hash = models.CharField(max_length=32, null=True, default=None)
+    version_hash = models.CharField(max_length=32, null=True, default=None)    
     last_sync = models.DateTimeField(null=True, default=None)
-
+    last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
+    
     def __str__(self):
         return '{} ({})'.format(
             self.alliance.alliance_name, 
             self.character.character.character_name if self.character is not None else 'None'
         )
+
+    def get_last_error_message(self):
+        msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
+        return msg[0][1] if len(msg) > 0 else 'Undefined error'
 
     @staticmethod
     def get_esi_scopes() -> list:
@@ -36,13 +60,17 @@ class SyncedCharacter(models.Model):
     
     ERROR_NONE = 0
     ERROR_TOKEN_INVALID = 1
-    ERROR_INSUFFICIENT_PERMISSIONS = 2
+    ERROR_TOKEN_EXPIRED = 2
+    ERROR_INSUFFICIENT_PERMISSIONS = 3
+    ERROR_ESI_UNAVAILABLE = 5
     ERROR_UNKNOWN = 99
 
     ERRORS_LIST = [
         (ERROR_NONE, 'No error'),
         (ERROR_TOKEN_INVALID, 'Invalid token'),
+        (ERROR_TOKEN_EXPIRED, 'Expired token'),
         (ERROR_INSUFFICIENT_PERMISSIONS, 'Insufficient permissions'),
+        (ERROR_ESI_UNAVAILABLE, 'ESI API is currently unavailable'),
         (ERROR_UNKNOWN, 'Unknown error'),
     ]
         
@@ -52,20 +80,17 @@ class SyncedCharacter(models.Model):
         primary_key=True
     )
     manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
-    version_hash = models.CharField(max_length=32, null=True, default=None)
-    last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
+    version_hash = models.CharField(max_length=32, null=True, default=None)    
     last_sync = models.DateTimeField(null=True, default=None)
+    last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
     
-
     def __str__(self):
         return self.character.character.character_name
-
 
     def get_last_error_message(self):
         msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
         return msg[0][1] if len(msg) > 0 else 'Undefined error'
 
-        
     @staticmethod
     def get_esi_scopes() -> list:
         return [
@@ -89,4 +114,4 @@ class AllianceContact(models.Model):
             models.UniqueConstraint(
                 fields=['manager', 'contact_id'], 
                 name="manager-contacts-unq")
-        ]
+        ]        

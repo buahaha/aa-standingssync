@@ -4,12 +4,13 @@ from django.test import TestCase
 from unittest.mock import Mock, patch
 from django.contrib.auth.models import User, Permission 
 from esi.models import Token, Scope
+from esi.errors import TokenExpiredError, TokenInvalidError
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from allianceauth.authentication.models import CharacterOwnership
 from . import tasks
 from .models import *
 
-# reconfigure logger so we get output to console during test
+# reconfigure logger so we get logging from tasks to console during test
 c_handler = logging.StreamHandler(sys.stdout)
 logger = logging.getLogger('standingssync.tasks')
 logger.level = logging.DEBUG
@@ -17,13 +18,18 @@ logger.addHandler(c_handler)
 
 class TestStandingsSyncTasks(TestCase):
     
+    # note: setup is making calls to ESI to get full info for entites
+    # all ESI calls in the tested module are mocked though
+
+
     @classmethod
     def setUpClass(cls):
         super(TestStandingsSyncTasks, cls).setUpClass()
 
         # create environment
-        cls.character = EveCharacter.objects.create_character(93330670)          
-        cls.alt = EveCharacter.objects.create_character(94170080)
+        # 1 user with 1 alt character        
+        cls.character = EveCharacter.objects.create_character(207150426)  
+        cls.alt = EveCharacter.objects.create_character(95328603)
         cls.alliance = EveAllianceInfo.objects.create_alliance(
             cls.character.alliance_id
         )        
@@ -38,6 +44,7 @@ class TestStandingsSyncTasks(TestCase):
             owner_hash='x2',
             user=cls.user
         )                
+        # 12 ESI contacts
         cls.contacts = [
             {
                 'contact_id': 207150426,
@@ -53,15 +60,62 @@ class TestStandingsSyncTasks(TestCase):
                 'contact_id': 1018389948,
                 'contact_type': 'corporation',
                 'standing': 10
-            }
+            },
+             {
+                'contact_id': 93443510,
+                'contact_type': 'character',
+                'standing': -10
+            },
+            {
+                'contact_id': 99008458,
+                'contact_type': 'alliance',
+                'standing': 5
+            },
+            {
+                'contact_id': 538004967,
+                'contact_type': 'corporation',
+                'standing': 10
+            },
+             {
+                'contact_id': 92330586,
+                'contact_type': 'character',
+                'standing': -5
+            },
+            {
+                'contact_id': 99003581,
+                'contact_type': 'alliance',
+                'standing': 5
+            },
+            {
+                'contact_id': 98561441,
+                'contact_type': 'corporation',
+                'standing': 10
+            },
+             {
+                'contact_id': 2112796106,
+                'contact_type': 'character',
+                'standing': -10
+            },
+            {
+                'contact_id': 386292982,
+                'contact_type': 'alliance',
+                'standing': 5
+            },
+            {
+                'contact_id': 98479815,
+                'contact_type': 'corporation',
+                'standing': 10
+            },
+            
         ]
 
     # test run_character_sync
 
-    # run for non existing sync manager
+    # calling for an non existing sync character should raise an expcetion
     def test_run_character_sync_wrong_pk(self):        
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             tasks.run_character_sync(99)
+
 
     # verify sync is aborted when user is missing permissions
     def test_run_character_sync_insufficient_permissions(self):        
@@ -85,7 +139,95 @@ class TestStandingsSyncTasks(TestCase):
             SyncedCharacter.ERROR_INSUFFICIENT_PERMISSIONS
         )
 
-    # normal synch of new contacts    
+    # test invalid token
+    @patch('standingssync.tasks.Token')    
+    def test_run_character_sync_invalid_token(
+            self,             
+            mock_Token
+        ):                
+        
+        mock_Token.objects.filter.side_effect = TokenInvalidError()        
+                
+        # create test data
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance,
+            character=self.main_ownership,
+            version_hash="new"
+        )
+        for contact in self.contacts:
+            AllianceContact.objects.create(
+                manager = sync_manager,
+                contact_id = contact['contact_id'],
+                contact_type = contact['contact_type'],
+                standing = contact['standing'],
+            )
+        
+        p = Permission.objects.filter(            
+            codename='add_syncedcharacter'
+        ).first()
+        self.user.user_permissions.add(p)
+        self.user.save()
+
+        synced_character = SyncedCharacter.objects.create(
+            character=self.alt_ownership,
+            manager=sync_manager
+        )
+
+        # run tests        
+        tasks.run_character_sync(synced_character.pk)
+
+        synced_character.refresh_from_db()
+        self.assertEqual(
+            synced_character.last_error, 
+            SyncedCharacter.ERROR_TOKEN_INVALID
+        )
+
+
+    # test expired token
+    @patch('standingssync.tasks.Token')    
+    def test_run_character_sync_expired_token(
+            self,             
+            mock_Token
+        ):                
+        
+        mock_Token.objects.filter.side_effect = TokenExpiredError()        
+                
+        # create test data
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance,
+            character=self.main_ownership,
+            version_hash="new"
+        )
+        for contact in self.contacts:
+            AllianceContact.objects.create(
+                manager = sync_manager,
+                contact_id = contact['contact_id'],
+                contact_type = contact['contact_type'],
+                standing = contact['standing'],
+            )
+        
+        p = Permission.objects.filter(            
+            codename='add_syncedcharacter'
+        ).first()
+        self.user.user_permissions.add(p)
+        self.user.save()
+
+        synced_character = SyncedCharacter.objects.create(
+            character=self.alt_ownership,
+            manager=sync_manager
+        )
+
+        # run tests        
+        tasks.run_character_sync(synced_character.pk)
+
+        synced_character.refresh_from_db()
+        self.assertEqual(
+            synced_character.last_error, 
+            SyncedCharacter.ERROR_TOKEN_EXPIRED
+        )
+        
+
+    # run normal sync for a character
     @patch('standingssync.tasks.Token')
     @patch('standingssync.tasks.esi_client_factory')
     def test_run_character_sync(
@@ -94,21 +236,25 @@ class TestStandingsSyncTasks(TestCase):
             mock_Token
         ):        
         # create sub-mocks
-        client = Mock()
-        mock_result = Mock()
-        mock_result.result = Mock(return_value=self.contacts)
-        client.Contacts.get_characters_character_id_contacts = Mock(
-            return_value=mock_result
+        mock_client = Mock()
+        mock_get_result = Mock()
+        mock_get_result.result.return_value = self.contacts
+        mock_delete_result = Mock()
+        mock_delete_result.result.return_value = 'ok'
+        mock_put_result = Mock()
+        mock_put_result.result.return_value = 'ok'
+        mock_client.Contacts.get_characters_character_id_contacts = Mock(
+            return_value=mock_get_result
         )
-        client.Contacts.delete_characters_character_id_contacts = Mock(
-            return_value=mock_result
+        mock_client.Contacts.delete_characters_character_id_contacts = Mock(
+            return_value=mock_delete_result
         )
-        client.Contacts.post_characters_character_id_contacts = Mock(
-            return_value=mock_result
+        mock_client.Contacts.post_characters_character_id_contacts = Mock(
+            return_value=mock_put_result
         )
         
         # combine sub mocks into patch mock
-        mock_esi_client_factory.return_value = client   
+        mock_esi_client_factory.return_value = mock_client   
         mock_Token.objects.filter = Mock()
                 
         # create test data
@@ -138,10 +284,18 @@ class TestStandingsSyncTasks(TestCase):
 
         # run tests
         tasks.run_character_sync(synced_character.pk)
+        
+        synced_character.refresh_from_db()
+        self.assertEqual(
+            synced_character.last_error, 
+            SyncedCharacter.ERROR_NONE
+        )
 
-        # tbd
-        self.assertEqual(1, 1)
-
+        # expected: 12 contacts = 1 x get, 2 x delete, 12 x post
+        self.assertEqual(mock_get_result.result.call_count, 1)
+        self.assertEqual(mock_delete_result.result.call_count, 2)
+        self.assertEqual(mock_put_result.result.call_count, 12)
+        
 
     # test run_manager_sync
 
@@ -157,6 +311,12 @@ class TestStandingsSyncTasks(TestCase):
             alliance=self.alliance
         )
         tasks.run_manager_sync(sync_manager.pk)
+        sync_manager.refresh_from_db()
+        self.assertEqual(
+            sync_manager.last_error, 
+            SyncManager.ERROR_NO_CHARACTER            
+        )
+
 
     # normal synch of new contacts
     @patch('standingssync.tasks.run_character_sync')
@@ -169,7 +329,7 @@ class TestStandingsSyncTasks(TestCase):
         # create mocks
         client = Mock()
         mock_result = Mock()
-        mock_result.result = Mock(return_value=self.contacts)
+        mock_result.result.return_value = self.contacts
         client.Contacts.get_alliances_alliance_id_contacts = Mock(
             return_value=mock_result
         )
@@ -177,6 +337,11 @@ class TestStandingsSyncTasks(TestCase):
         mock_run_character_sync.delay = Mock()
 
         # create test data
+        p = Permission.objects.filter(            
+            codename='add_syncmanager'
+        ).first()
+        self.user.user_permissions.add(p)
+        self.user.save()
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance,
             character=self.main_ownership
@@ -188,6 +353,12 @@ class TestStandingsSyncTasks(TestCase):
 
         # run manager sync
         tasks.run_manager_sync(sync_manager.pk)
+
+        sync_manager.refresh_from_db()
+        self.assertEqual(
+            sync_manager.last_error, 
+            SyncManager.ERROR_NONE            
+        )
         
         # should have tried to fetch contacts
         self.assertEqual(mock_result.result.call_count, 1)
@@ -195,11 +366,10 @@ class TestStandingsSyncTasks(TestCase):
         # should be 3 contacts stored in DV
         self.assertEqual(
             AllianceContact.objects.filter(manager=sync_manager).count(),
-            3
+            12
         )
 
     
-     
     # normal synch of new contacts
     @patch('standingssync.tasks.run_manager_sync')    
     def test_run_sync_all(
@@ -237,3 +407,69 @@ class TestStandingsSyncTasks(TestCase):
         self.assertEqual(mock_run_manager_sync.delay.call_count, 2)
 
 
+    # test expired token
+    @patch('standingssync.tasks.Token')    
+    def test_run_manager_sync_expired_token(
+            self,             
+            mock_Token
+        ):                
+        
+        mock_Token.objects.filter.side_effect = TokenExpiredError()        
+                        
+        # create test data
+        p = Permission.objects.filter(            
+            codename='add_syncmanager'
+        ).first()
+        self.user.user_permissions.add(p)
+        self.user.save()
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance,
+            character=self.main_ownership
+        )
+        SyncedCharacter.objects.create(
+            character=self.alt_ownership,
+            manager=sync_manager
+        )
+
+        # run manager sync
+        tasks.run_manager_sync(sync_manager.pk)
+
+        sync_manager.refresh_from_db()
+        self.assertEqual(
+            sync_manager.last_error, 
+            SyncManager.ERROR_TOKEN_EXPIRED            
+        )
+
+
+    # test invalid token
+    @patch('standingssync.tasks.Token')    
+    def test_run_manager_sync_invalid_token(
+            self,             
+            mock_Token
+        ):                
+        
+        mock_Token.objects.filter.side_effect = TokenInvalidError()        
+                        
+        # create test data
+        p = Permission.objects.filter(            
+            codename='add_syncmanager'
+        ).first()
+        self.user.user_permissions.add(p)
+        self.user.save()
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance,
+            character=self.main_ownership
+        )
+        SyncedCharacter.objects.create(
+            character=self.alt_ownership,
+            manager=sync_manager
+        )
+
+        # run manager sync
+        tasks.run_manager_sync(sync_manager.pk)
+
+        sync_manager.refresh_from_db()
+        self.assertEqual(
+            sync_manager.last_error, 
+            SyncManager.ERROR_TOKEN_INVALID            
+        )

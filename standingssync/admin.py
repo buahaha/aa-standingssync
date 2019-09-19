@@ -4,8 +4,21 @@ from . import tasks
 
 @admin.register(SyncedCharacter)
 class SyncedCharacterAdmin(admin.ModelAdmin):
-    list_display = ('user', 'character_name', 'version_hash', 'last_sync', 'last_error', 'manager')
-    list_filter = ('last_error', 'version_hash', 'last_sync', 'character__user', 'manager')
+    list_display = (
+        'user', 
+        'character_name', 
+        'version_hash', 
+        'last_sync', 
+        'last_error', 
+        'manager'
+    )
+    list_filter = (
+        'last_error', 
+        'version_hash', 
+        'last_sync', 
+        'character__user', 
+        'manager'
+    )
     actions = ['start_sync_contacts']
     
     list_display_links = None
@@ -32,7 +45,7 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
             'Started syncing for: {}'.format(', '.join(names))
         )
         
-    start_sync_contacts.short_description = "Force sync for character"
+    start_sync_contacts.short_description = "Sync selected characters"
 
 
 @admin.register(SyncManager)
@@ -43,7 +56,8 @@ class SyncManagerAdmin(admin.ModelAdmin):
         'user', 
         'character_name',         
         'version_hash', 
-        'last_sync'
+        'last_sync',
+        'last_error'
     )
 
     list_display_links = None
@@ -78,4 +92,4 @@ class SyncManagerAdmin(admin.ModelAdmin):
             'Started syncing for: {}'.format(', '.join(names))
         )
         
-    start_sync_managers.short_description = "Force sync for managers"
+    start_sync_managers.short_description = "Sync selected managers"

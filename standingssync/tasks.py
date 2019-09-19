@@ -4,7 +4,8 @@ import datetime
 import hashlib
 import json
 from celery import shared_task
-from esi.models import Token, TokenExpiredError
+from esi.models import Token
+from esi.errors import TokenExpiredError, TokenInvalidError
 from esi.clients import esi_client_factory
 from django.db import transaction
 from .models import *
@@ -23,7 +24,10 @@ logger = logging.getLogger(__name__)
 logger = LoggerAdapter(logger, __package__)
 
 
-SWAGGER_SPEC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'swagger.json')
+SWAGGER_SPEC_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 
+    'swagger.json'
+)
 """
 Swagger spec operations:
 
@@ -80,8 +84,16 @@ def run_character_sync(sync_char_pk, force_sync = False):
                 user=synced_character.character.user, 
                 character_id=synced_character.character.character.character_id
             ).require_scopes(SyncedCharacter.get_esi_scopes()).require_valid().first()
-        except TokenExpiredError:
+        except TokenInvalidError:
+            logger.error(addTag(
+                'Invalid token for syncing this character'
+            ))
             synced_character.last_error = SyncedCharacter.ERROR_TOKEN_INVALID
+            synced_character.save()
+            return
+
+        except TokenExpiredError:
+            synced_character.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
             synced_character.save()
             return
         
@@ -155,6 +167,8 @@ def run_manager_sync(manager_pk, force_sync = False):
                 'No character configured to sync alliance contacts. ' 
                 + 'Sync aborted'
             ))
+            sync_manager.last_error = SyncManager.ERROR_NO_CHARACTER
+            sync_manager.save()
             return
 
         # abort if character does not have sufficient permissions
@@ -164,6 +178,8 @@ def run_manager_sync(manager_pk, force_sync = False):
             logger.error(addTag(
                 'Character does not have sufficient permission to sync contacts'
             ))
+            sync_manager.last_error = SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
+            sync_manager.save()
             return
 
         # get token    
@@ -174,56 +190,76 @@ def run_manager_sync(manager_pk, force_sync = False):
             ).require_scopes(
                 SyncManager.get_esi_scopes()
             ).require_valid().first()
-        except TokenExpiredError:        
+        except TokenInvalidError:        
             logger.error(addTag(
-                'Missing valid token to sync alliance contacts'
+                'Invalid token for fetching alliance contacts'
             ))
+            sync_manager.last_error = SyncManager.ERROR_TOKEN_INVALID
+            sync_manager.save()
+            return
+            
+        except TokenExpiredError:
+            sync_manager.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
+            sync_manager.save()
             return
         
-        # fetching data from ESI
-        logger.info(addTag('Fetching alliance contacts from ESI'))        
-        client = esi_client_factory(token=token, spec_file=SWAGGER_SPEC_PATH)
+        try:
+            # fetching data from ESI
+            logger.info(addTag('Fetching alliance contacts from ESI'))        
+            client = esi_client_factory(token=token, spec_file=SWAGGER_SPEC_PATH)
 
-        contacts = client.Contacts.get_alliances_alliance_id_contacts(
-            alliance_id=sync_manager.character.character.alliance_id
-        ).result()
-        
-        # calc MD5 hash on contacts    
-        new_version_hash = hashlib.md5(
-            json.dumps(contacts).encode('utf-8')
-        ).hexdigest()
+            contacts = client.Contacts.get_alliances_alliance_id_contacts(
+                alliance_id=sync_manager.character.character.alliance_id
+            ).result()
+            
+            # calc MD5 hash on contacts    
+            new_version_hash = hashlib.md5(
+                json.dumps(contacts).encode('utf-8')
+            ).hexdigest()
 
-        if force_sync or new_version_hash != current_version_hash:
-            logger.info(
-                addTag('Storing alliance update with {:,} contacts'.format(
-                    len(contacts)
-                ))
-            )
-            with transaction.atomic():
-                AllianceContact.objects.filter(manager=sync_manager).delete()
-                for contact in contacts:
-                    AllianceContact.objects.create(
-                        manager=sync_manager,
-                        contact_id=contact['contact_id'],
-                        contact_type=contact['contact_type'],
-                        standing=contact['standing']                        
-                    )
-                sync_manager.version_hash = new_version_hash
-                sync_manager.last_sync = datetime.datetime.now(
-                    datetime.timezone.utc
+            if force_sync or new_version_hash != current_version_hash:
+                logger.info(
+                    addTag('Storing alliance update with {:,} contacts'.format(
+                        len(contacts)
+                    ))
                 )
-                sync_manager.save()
-        else:
-            logger.info(addTag('Alliance contacts are unchanged.'))
+                with transaction.atomic():
+                    AllianceContact.objects.filter(manager=sync_manager).delete()
+                    for contact in contacts:
+                        AllianceContact.objects.create(
+                            manager=sync_manager,
+                            contact_id=contact['contact_id'],
+                            contact_type=contact['contact_type'],
+                            standing=contact['standing']                        
+                        )
+                    sync_manager.version_hash = new_version_hash
+                    sync_manager.last_sync = datetime.datetime.now(
+                        datetime.timezone.utc
+                    )
+                    sync_manager.save()
+            else:
+                logger.info(addTag('Alliance contacts are unchanged.'))
+            
+            # dispatch tasks for characters that need syncing
+            alts_need_syncing = SyncedCharacter.objects.filter(
+                    manager=sync_manager
+                ).exclude(
+                version_hash=new_version_hash
+            )
+            for character in alts_need_syncing:
+                run_character_sync.delay(character.pk)
+
+            sync_manager.last_error = SyncManager.ERROR_NONE
+            sync_manager.save()
         
-        # dispatch tasks for characters that need syncing
-        alts_need_syncing = SyncedCharacter.objects.filter(
-                manager=sync_manager
-            ).exclude(
-            version_hash=new_version_hash
-        )
-        for character in alts_need_syncing:
-            run_character_sync.delay(character.pk)
+        except Exception as ex:
+            logger.error(
+                'An unexepected error ocurred while tryin to '
+                + 'update contacts: {}'. format(ex)
+            )
+            sync_manager.last_error = SyncManager.ERROR_UNKNOWN
+            sync_manager.save()
+            raise ex
 
 
 @shared_task
