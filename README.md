@@ -26,16 +26,17 @@ To enable non-alliance members to use alliance standings the personal contact of
 1. Install into AA virtual environment with PIP install from this repo
 
    ```bash
-   pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync
+   pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync.git
    ```
 
 1. Configure your AA settings (`local.py`)
    - Add `'standingssync'` to `INSTALLED_APPS`
-   - Add these lines:
+   - Add these lines add to bottom of your settings file:
 
    ```python
+   # settings for standingssync
    CELERYBEAT_SCHEDULE['standingssync.run_regular_sync'] = {
-    'task': 'evesde.tasks.run_update',
+    'task': 'standingssync.tasks.run_regular_sync',
     'schedule': crontab(minute=0, hour='*/4'),
     'kwargs': {'report_mode': 'events'}
    }
