@@ -1,5 +1,6 @@
 include LICENSE
 include README.md
+include standingssync/swagger.json
 recursive-include standingssync *.py
 recursive-include standingssync/static *
 recursive-include standingssync/templates *
