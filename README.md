@@ -46,7 +46,12 @@ To enable non-alliance members to use alliance standings the personal contact of
 
    > **Note**:<br>This configures the sync process to run every 4 hours starting at 00:00 AM UTC. Feel free to adjust the timing to the needs of you alliance.<br>However, do not schedule it too tightly. Or you risk generating more and more tasks, when sync tasks from previous runs are not able to finish within the alloted time.
 
-1. Run migrations
+1. Run migrations & copy static files 
+ 
+   ```bash
+   python manage.py migration
+   python manage.py collectstatis
+   ```
 
 1. Restart your supervisor services for AA
 
