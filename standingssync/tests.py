@@ -429,8 +429,8 @@ class TestStandingsSyncTasks(TestCase):
             character=main_ownership2
         )
         
-        # run manager sync
-        tasks.run_sync_all()
+        # run regular sync
+        tasks.run_regular_sync()
 
         # should have tried to dipatch run_manager_sync 2 times
         self.assertEqual(mock_run_manager_sync.delay.call_count, 2)
