@@ -238,7 +238,9 @@ class TestStandingsSyncTasks(TestCase):
         # create sub-mocks
         mock_client = Mock()
         mock_get_result = Mock()
-        mock_get_result.result.return_value = self.contacts
+        mock_get_response = Mock()
+        mock_get_response.headers = {'x-pages': 1}        
+        mock_get_result.result.return_value = [self.contacts, mock_get_response]
         mock_delete_result = Mock()
         mock_delete_result.result.return_value = 'ok'
         mock_put_result = Mock()
@@ -291,10 +293,10 @@ class TestStandingsSyncTasks(TestCase):
             SyncedCharacter.ERROR_NONE
         )
 
-        # expected: 12 contacts = 1 x get, 2 x delete, 12 x post
+        # expected: 12 contacts = 1 x get, 1 x delete, 4 x put
         self.assertEqual(mock_get_result.result.call_count, 1)
-        self.assertEqual(mock_delete_result.result.call_count, 2)
-        self.assertEqual(mock_put_result.result.call_count, 12)
+        self.assertEqual(mock_delete_result.result.call_count, 1)
+        self.assertEqual(mock_put_result.result.call_count, 4)
         
 
     # test run_manager_sync
@@ -327,13 +329,15 @@ class TestStandingsSyncTasks(TestCase):
             mock_run_character_sync
         ):
         # create mocks
-        client = Mock()
+        mock_client = Mock()
         mock_result = Mock()
-        mock_result.result.return_value = self.contacts
-        client.Contacts.get_alliances_alliance_id_contacts = Mock(
+        mock_response = Mock()
+        mock_response.headers = {'x-pages': 1}
+        mock_result.result.return_value = [self.contacts, mock_response]
+        mock_client.Contacts.get_alliances_alliance_id_contacts = Mock(
             return_value=mock_result
         )
-        mock_esi_client_factory.return_value = client        
+        mock_esi_client_factory.return_value = mock_client        
         mock_run_character_sync.delay = Mock()
 
         # create test data
