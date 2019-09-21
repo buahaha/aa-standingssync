@@ -6,12 +6,13 @@ Current status: **BETA**
 
 ## Features
 
-- Appears as app in the sidebar of AA called "Standings Sync"
-- Users can add / remove their characters for syncing via app
-- Added characters get synchronised with current alliance standings until removed
-- Multiple alliances can be setup for synchronisation
-- App chooses alliance for sync based on memberships of the user
-- Admins can inspect sync status and manually re-start syncing for alliance and characters
+Here is an high level overview of the main features:
+
+- Synchronize alliance standings / contacts to non-alliance characters
+- Users can choose which of their characters shall be synchronized
+- Supports multiple alliances
+- Synchronization is ongoing until user chooses to remove character from synchronization
+- Synchronization ceases automatically should the user loose permissions
 
 ## Screenshot
 
@@ -35,7 +36,7 @@ pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync.git
 
 ### 2 Update Eve Online app
  
-Update your Eve Online app to include the folowing scopes:
+Update the Eve Online app used for authentication in your AA installation to include the folowing scopes:
 
 ```plain
 esi-characters.read_contacts.v1
