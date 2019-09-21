@@ -263,9 +263,21 @@ def run_manager_sync(manager_pk, force_sync = False):
             logger.info(addTag('Fetching alliance contacts from ESI'))        
             client = esi_client_factory(token=token, spec_file=SWAGGER_SPEC_PATH)
 
-            contacts = client.Contacts.get_alliances_alliance_id_contacts(
+            # get contacts from first page
+            operation = client.Contacts.get_alliances_alliance_id_contacts(
                 alliance_id=sync_manager.character.character.alliance_id
-            ).result()
+            )
+            operation.also_return_response = True
+            contacts, response = operation.result()
+            pages = int(response.headers['x-pages'])
+            
+            # add contacts from additional pages if any            
+            for page in range(2, pages + 1):
+                contacts += client.Contacts.get_alliances_alliance_id_contacts(
+                    alliance_id=sync_manager.character.character.alliance_id,
+                    page=page
+                ).result()
+
             
             # calc MD5 hash on contacts    
             new_version_hash = hashlib.md5(
