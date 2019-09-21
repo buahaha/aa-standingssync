@@ -25,45 +25,60 @@ To enable non-alliance members to use alliance standings the personal contact of
 
 ## Installation
 
-1. Install into AA virtual environment with PIP install from this repo
+### 1. Install app
 
-   ```bash
-   pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync.git
-   ```
+Install into AA virtual environment with PIP install from this repo:
 
-1. Configure your AA settings (`local.py`)
-   - Add `'standingssync'` to `INSTALLED_APPS`
-   - Add these lines add to bottom of your settings file:
+```bash
+pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync.git
+```
 
+### 2 Update Eve Online app
+ 
+Update your Eve Online app to include the folowing scopes:
+
+```plain
+esi-characters.read_contacts.v1
+esi-characters.write_contacts.v1
+esi-alliances.read_contacts.v1
+```
+
+### 3. Configure AA settings
+
+Configure your AA settings (`local.py`) as follows:
+
+- Add `'standingssync'` to `INSTALLED_APPS`
+- Add these lines add to bottom of your settings file:
    ```python
    # settings for standingssync
    CELERYBEAT_SCHEDULE['standingssync.run_regular_sync'] = {
-    'task': 'standingssync.tasks.run_regular_sync',
-    'schedule': crontab(minute=0, hour='*/4'),
-    'kwargs': {'report_mode': 'events'}
+       'task': 'standingssync.tasks.run_regular_sync',
+       'schedule': crontab(minute=0, hour='*/4'),
+       'kwargs': {'report_mode': 'events'}
    }
    ```
-
    > **Note**:<br>This configures the sync process to run every 4 hours starting at 00:00 AM UTC. Feel free to adjust the timing to the needs of you alliance.<br>However, do not schedule it too tightly. Or you risk generating more and more tasks, when sync tasks from previous runs are not able to finish within the alloted time.
 
-1. Run migrations & copy static files
+### 4. Finalize installation into AA
 
-   ```bash
-   python manage.py migration
-   python manage.py collectstatis
-   ```
+Run migrations & copy static files
 
-1. Restart your supervisor services for AA
+```bash
+python manage.py migrate
+python manage.py collectstatic
+```
 
-1. Setup permissions
+Restart your supervisor services for AA
 
-   Next assign permissions to states / groups / users. See section "Permissions" below for details.
+### 5. Setup permissions
 
-1. Set alliance character
+Now you can access Alliance Auth and setup permissions for your users. See section "Permissions" below for details.
 
-   Finally you need to set an alliance character that will be used for fetching the alliance contacts / standing. Just click on "Set Alliance Character" and add the requested token. Note that only users with the related permission will be able to see and use this function.
+### 6. Setup alliance character
 
-   Once an alliance character is set the app will immediatly start fetching alliance contacts. You may need to reload the page to see the result.
+Finally you need to set the alliance character that will be used for fetching the alliance contacts / standing. Just click on "Set Alliance Character" and add the requested token. Note that only users with the appropriate permission will be able to see and use this function.
+
+Once an alliance character is set the app will immediatly start fetching alliance contacts. Wait a minute and then reload the page to see the result.
 
 That's it. The Standing Sync app is fully installed and ready to be used.
   
