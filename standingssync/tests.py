@@ -1,5 +1,6 @@
 import logging
 import sys
+import math
 from django.test import TestCase
 from unittest.mock import Mock, patch
 from django.contrib.auth.models import User, Permission 
@@ -327,15 +328,27 @@ class TestStandingsSyncTasks(TestCase):
             self, 
             mock_esi_client_factory, 
             mock_run_character_sync
-        ):
+        ):        
         # create mocks
+        def get_contacts_page(*args, **kwargs):
+            """returns single page for operation.result(), first with header"""
+            page_size = 5
+            mock_calls_count = len(mock_operation.mock_calls)
+            start = (mock_calls_count - 1) * page_size
+            stop = start + page_size
+            pages_count = int(math.ceil(len(self.contacts) / page_size))
+            if mock_calls_count == 1:
+                mock_response = Mock()
+                mock_response.headers = {'x-pages': pages_count}
+                return [self.contacts[start:stop], mock_response]
+            else:
+                return self.contacts[start:stop]
+        
         mock_client = Mock()
-        mock_result = Mock()
-        mock_response = Mock()
-        mock_response.headers = {'x-pages': 1}
-        mock_result.result.return_value = [self.contacts, mock_response]
+        mock_operation = Mock()
+        mock_operation.result.side_effect = get_contacts_page        
         mock_client.Contacts.get_alliances_alliance_id_contacts = Mock(
-            return_value=mock_result
+            return_value=mock_operation
         )
         mock_esi_client_factory.return_value = mock_client        
         mock_run_character_sync.delay = Mock()
@@ -365,12 +378,12 @@ class TestStandingsSyncTasks(TestCase):
         )
         
         # should have tried to fetch contacts
-        self.assertEqual(mock_result.result.call_count, 1)
+        self.assertEqual(mock_operation.result.call_count, 3)
 
-        # should be 3 contacts stored in DV
+        # should be number of contacts stored in DV
         self.assertEqual(
             AllianceContact.objects.filter(manager=sync_manager).count(),
-            12
+            len(self.contacts)
         )
 
     

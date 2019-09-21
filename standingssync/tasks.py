@@ -260,7 +260,7 @@ def run_manager_sync(manager_pk, force_sync = False):
         
         try:
             # fetching data from ESI
-            logger.info(addTag('Fetching alliance contacts from ESI'))        
+            logger.info(addTag('Fetching alliance contacts from ESI - page 1'))
             client = esi_client_factory(token=token, spec_file=SWAGGER_SPEC_PATH)
 
             # get contacts from first page
@@ -273,6 +273,9 @@ def run_manager_sync(manager_pk, force_sync = False):
             
             # add contacts from additional pages if any            
             for page in range(2, pages + 1):
+                logger.info(addTag(
+                    'Fetching alliance contacts from ESI - page {}'.format(page)
+                ))
                 contacts += client.Contacts.get_alliances_alliance_id_contacts(
                     alliance_id=sync_manager.character.character.alliance_id,
                     page=page
