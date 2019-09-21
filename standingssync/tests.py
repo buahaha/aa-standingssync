@@ -236,18 +236,30 @@ class TestStandingsSyncTasks(TestCase):
             mock_esi_client_factory,
             mock_Token
         ):        
-        # create sub-mocks
+        # create mocks
+        def get_contacts_page(*args, **kwargs):
+            """returns single page for operation.result(), first with header"""
+            page_size = 5
+            mock_calls_count = len(mock_get_operation.mock_calls)
+            start = (mock_calls_count - 1) * page_size
+            stop = start + page_size
+            pages_count = int(math.ceil(len(self.contacts) / page_size))
+            if mock_calls_count == 1:
+                mock_response = Mock()
+                mock_response.headers = {'x-pages': pages_count}
+                return [self.contacts[start:stop], mock_response]
+            else:
+                return self.contacts[start:stop]
+        
         mock_client = Mock()
-        mock_get_result = Mock()
-        mock_get_response = Mock()
-        mock_get_response.headers = {'x-pages': 1}        
-        mock_get_result.result.return_value = [self.contacts, mock_get_response]
+        mock_get_operation = Mock()        
+        mock_get_operation.result.side_effect = get_contacts_page
         mock_delete_result = Mock()
         mock_delete_result.result.return_value = 'ok'
         mock_put_result = Mock()
         mock_put_result.result.return_value = 'ok'
         mock_client.Contacts.get_characters_character_id_contacts = Mock(
-            return_value=mock_get_result
+            return_value=mock_get_operation
         )
         mock_client.Contacts.delete_characters_character_id_contacts = Mock(
             return_value=mock_delete_result
@@ -294,8 +306,8 @@ class TestStandingsSyncTasks(TestCase):
             SyncedCharacter.ERROR_NONE
         )
 
-        # expected: 12 contacts = 1 x get, 1 x delete, 4 x put
-        self.assertEqual(mock_get_result.result.call_count, 1)
+        # expected: 12 contacts = 3 x get, 1 x delete, 4 x put
+        self.assertEqual(mock_get_operation.result.call_count, 3)
         self.assertEqual(mock_delete_result.result.call_count, 1)
         self.assertEqual(mock_put_result.result.call_count, 4)
         
