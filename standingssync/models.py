@@ -1,7 +1,6 @@
 from django.db import models
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo
-from datetime import datetime, timedelta, timezone
 
 
 class SyncManager(models.Model):
@@ -95,10 +94,8 @@ class SyncedCharacter(models.Model):
     def get_status_message(self):
         if self.last_error != self.ERROR_NONE:
             message = self.get_last_error_message()
-        elif self.last_sync is not None:
-            td = datetime.now(timezone.utc) - self.last_sync
-            hours = td.total_seconds() / 3600
-            message = 'Last synced {0:.1f} hours ago'. format(hours)
+        elif self.last_sync is not None:            
+            message = 'OK'
         else:
             message = 'Not synced yet'
         
