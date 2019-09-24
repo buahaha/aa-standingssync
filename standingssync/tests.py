@@ -19,7 +19,7 @@ logger.addHandler(c_handler)
 
 class TestStandingsSyncTasks(TestCase):
     
-    # note: setup is making calls to ESI to get full info for entites
+    # note: setup is making calls to ESI to get full info for entities
     # all ESI calls in the tested module are mocked though
 
 
@@ -112,7 +112,7 @@ class TestStandingsSyncTasks(TestCase):
 
     # test run_character_sync
 
-    # calling for an non existing sync character should raise an expcetion
+    # calling for an non existing sync character should raise an exception
     def test_run_character_sync_wrong_pk(self):        
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             tasks.run_character_sync(99)
@@ -133,12 +133,9 @@ class TestStandingsSyncTasks(TestCase):
             synced_character.last_error, 
             SyncedCharacter.ERROR_NONE
         )
-        tasks.run_character_sync(synced_character.pk)
-        synced_character.refresh_from_db()
-        self.assertEqual(
-            synced_character.last_error, 
-            SyncedCharacter.ERROR_INSUFFICIENT_PERMISSIONS
-        )
+        tasks.run_character_sync(synced_character.pk)        
+        with self.assertRaises(SyncedCharacter.DoesNotExist):
+            SyncedCharacter.objects.get(pk=synced_character.pk)
 
     # test invalid token
     @patch('standingssync.tasks.Token')    
@@ -176,12 +173,8 @@ class TestStandingsSyncTasks(TestCase):
 
         # run tests        
         tasks.run_character_sync(synced_character.pk)
-
-        synced_character.refresh_from_db()
-        self.assertEqual(
-            synced_character.last_error, 
-            SyncedCharacter.ERROR_TOKEN_INVALID
-        )
+        with self.assertRaises(SyncedCharacter.DoesNotExist):
+            SyncedCharacter.objects.get(pk=synced_character.pk)
 
 
     # test expired token
@@ -221,11 +214,8 @@ class TestStandingsSyncTasks(TestCase):
         # run tests        
         tasks.run_character_sync(synced_character.pk)
 
-        synced_character.refresh_from_db()
-        self.assertEqual(
-            synced_character.last_error, 
-            SyncedCharacter.ERROR_TOKEN_EXPIRED
-        )
+        with self.assertRaises(SyncedCharacter.DoesNotExist):
+            SyncedCharacter.objects.get(pk=synced_character.pk)
         
 
     # run normal sync for a character
@@ -414,7 +404,7 @@ class TestStandingsSyncTasks(TestCase):
             character=self.main_ownership
         )
 
-        # creat 2nd sync manager
+        # create 2nd sync manager
         character2 = EveCharacter.objects.create_character(2112839520)
         alliance2 = EveAllianceInfo.objects.create_alliance(
             character2.alliance_id
@@ -432,7 +422,7 @@ class TestStandingsSyncTasks(TestCase):
         # run regular sync
         tasks.run_regular_sync()
 
-        # should have tried to dipatch run_manager_sync 2 times
+        # should have tried to dispatch run_manager_sync 2 times
         self.assertEqual(mock_run_manager_sync.delay.call_count, 2)
 
 

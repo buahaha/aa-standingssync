@@ -1,6 +1,7 @@
 from django.db import models
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo
+from datetime import datetime, timedelta, timezone
 
 
 class SyncManager(models.Model):
@@ -49,7 +50,7 @@ class SyncManager(models.Model):
     def get_last_error_message(self):
         msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
         return msg[0][1] if len(msg) > 0 else 'Undefined error'
-
+    
     @staticmethod
     def get_esi_scopes() -> list:
         return ['esi-alliances.read_contacts.v1']
@@ -90,6 +91,18 @@ class SyncedCharacter(models.Model):
     def get_last_error_message(self):
         msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
         return msg[0][1] if len(msg) > 0 else 'Undefined error'
+
+    def get_status_message(self):
+        if self.last_error != self.ERROR_NONE:
+            message = self.get_last_error_message()
+        elif self.last_sync is not None:
+            td = datetime.now(timezone.utc) - self.last_sync
+            hours = td.total_seconds() / 3600
+            message = 'Last synced {0:.1f} hours ago'. format(hours)
+        else:
+            message = 'Not synced yet'
+        
+        return message
 
     @staticmethod
     def get_esi_scopes() -> list:

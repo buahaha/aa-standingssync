@@ -37,7 +37,7 @@ def index(request):
         characters.append({
             'portrait_url': character.character.character.portrait_url,
             'name': character.character.character.character_name,
-            'last_error_msg': character.get_last_error_message(),
+            'status_message': character.get_status_message(),
             'has_error': character.last_error != SyncedCharacter.ERROR_NONE,
             'pk': character.pk
         })
@@ -71,7 +71,7 @@ def add_alliance_manager(request, token):
         messages.warning(
             request, 
             'Can not add {}, because it is not a member of any '
-                + 'allliance. '.format(token_char)            
+                + 'alliance. '.format(token_char)            
         )
         success = False
     

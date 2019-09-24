@@ -8,7 +8,8 @@ from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 from esi.clients import esi_client_factory
 from django.db import transaction
-from .models import *
+from allianceauth.notifications import notify
+from .models import SyncManager, SyncedCharacter, AllianceContact
 
 
 # add custom tag to logger with name of this app
@@ -71,13 +72,26 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
         )
     addTag = makeLoggerTag(synced_character)
     
+    
+    user = synced_character.character.user
+    issue_title = 'Standings Sync deactivated for {}'.format(synced_character)
+    issue_message = lambda x: ('Standings Sync has been deactivated for your '
+        + 'character {}, because {}.<br>'. format(synced_character, x)
+        + 'Feel free to activate sync for your character again, '
+        + 'once the issue has been resolved.')
     # abort if owner does not have sufficient permissions
-    if not synced_character.character.user.has_perm(
+    if not user.has_perm(
             'standingssync.add_syncedcharacter'
-        ):
-        logger.warn('Sync aborted due to insufficient user permissions')
-        synced_character.last_error = SyncedCharacter.ERROR_INSUFFICIENT_PERMISSIONS
-        synced_character.save()
+        ):        
+        logger.info(addTag(
+            'sync deactivated due to insufficient user permissions'
+        ))
+        notify(
+            user, 
+            issue_title, 
+            issue_message('you no longer have permission for this service')
+        )
+        synced_character.delete()
         return
 
     # check if an update is needed
@@ -99,22 +113,33 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
                 character_id=synced_character.character.character.character_id
             ).require_scopes(SyncedCharacter.get_esi_scopes()).require_valid().first()
         except TokenInvalidError:
-            logger.error(addTag(
-                'Invalid token for syncing this character'
+            logger.info(addTag(
+                'sync deactivated due to invalid token'
             ))
-            synced_character.last_error = SyncedCharacter.ERROR_TOKEN_INVALID
-            synced_character.save()
+            notify(
+                user, 
+                issue_title, 
+                issue_message('your token is no longer valid')
+            )
+            synced_character.delete()
             return
 
         except TokenExpiredError:
-            synced_character.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
-            synced_character.save()
+            logger.info(addTag(
+                'sync deactivated due to expired token'
+            ))
+            notify(
+                user, 
+                issue_title, 
+                issue_message('your token has expired')
+            )
+            synced_character.delete()
             return
         
         if token is None:
             synced_character.last_error = SyncedCharacter.ERROR_UNKNOWN
             synced_character.save()
-            raise RuntimeError('Can not find suitable token for alliance char')
+            raise RuntimeError('Can not find suitable token for synced char')
         
         try:
             # fetching data from ESI
@@ -187,7 +212,7 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             synced_character.save()
         
         except Exception as ex:
-            logger.error('An unhandled exception has occured: {}'.format(ex))
+            logger.error('An unexpected error ocurred: {}'.format(ex))
             synced_character.last_error = SyncedCharacter.ERROR_UNKNOWN
             synced_character.save()
             raise
@@ -324,7 +349,7 @@ def run_manager_sync(manager_pk, force_sync = False):
         
         except Exception as ex:
             logger.error(
-                'An unexepected error ocurred while tryin to '
+                'An unexpected error ocurred while trying to '
                 + 'update contacts: {}'. format(ex)
             )
             sync_manager.last_error = SyncManager.ERROR_UNKNOWN
