@@ -76,7 +76,7 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
     user = synced_character.character.user
     issue_title = 'Standings Sync deactivated for {}'.format(synced_character)
     issue_message = lambda x: ('Standings Sync has been deactivated for your '
-        + 'character {}, because {}.<br>'. format(synced_character, x)
+        + 'character {}, because {}.\n'. format(synced_character, x)
         + 'Feel free to activate sync for your character again, '
         + 'once the issue has been resolved.')
     # abort if owner does not have sufficient permissions
