@@ -5,7 +5,6 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
-from django.conf import settings
 from esi.decorators import token_required
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from .models import *
@@ -119,7 +118,7 @@ def add_alliance_manager(request, token):
 
 @login_required
 @permission_required('standingssync.add_syncedcharacter')
-@token_required(scopes=settings.LOGIN_TOKEN_SCOPES + SyncedCharacter.get_esi_scopes())
+@token_required(scopes=SyncedCharacter.get_esi_scopes())
 def add_character(request, token):
     
     try:        
