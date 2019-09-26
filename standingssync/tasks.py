@@ -135,6 +135,15 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             )
             synced_character.delete()
             return
+
+        if manager.get_effective_standing(synced_character.character.character) <= 0:
+            notify(
+                user, 
+                issue_title, 
+                issue_message('your character is no longer blue with the alliance')
+            )
+            synced_character.delete()
+            return
         
         if token is None:
             synced_character.last_error = SyncedCharacter.ERROR_UNKNOWN

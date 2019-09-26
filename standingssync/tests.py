@@ -48,9 +48,9 @@ class TestStandingsSyncTasks(TestCase):
         # 12 ESI contacts
         cls.contacts = [
             {
-                'contact_id': 207150426,
+                'contact_id': 95328603,
                 'contact_type': 'character',
-                'standing': -10
+                'standing': 10
             },
             {
                 'contact_id': 498125261,
@@ -62,7 +62,7 @@ class TestStandingsSyncTasks(TestCase):
                 'contact_type': 'corporation',
                 'standing': 10
             },
-             {
+            {
                 'contact_id': 93443510,
                 'contact_type': 'character',
                 'standing': -10
@@ -136,6 +136,7 @@ class TestStandingsSyncTasks(TestCase):
         tasks.run_character_sync(synced_character.pk)        
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             SyncedCharacter.objects.get(pk=synced_character.pk)
+
 
     # test invalid token
     @patch('standingssync.tasks.Token')    
@@ -217,6 +218,48 @@ class TestStandingsSyncTasks(TestCase):
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             SyncedCharacter.objects.get(pk=synced_character.pk)
         
+
+    # test char no longer blue
+    @patch('standingssync.tasks.Token')    
+    def test_run_character_sync_not_blue(
+            self,             
+            mock_Token
+        ):                
+        
+        mock_Token.objects.filter.return_value = Mock()
+                
+        # create test data
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance,
+            character=self.main_ownership,
+            version_hash="new"
+        )        
+        for contact in self.contacts:
+            if contact['contact_id'] != int(self.alt.character_id):
+                AllianceContact.objects.create(
+                    manager = sync_manager,
+                    contact_id = contact['contact_id'],
+                    contact_type = contact['contact_type'],
+                    standing = contact['standing'],
+                )
+        
+        p = Permission.objects.filter(            
+            codename='add_syncedcharacter'
+        ).first()
+        self.user.user_permissions.add(p)
+        self.user.save()
+
+        synced_character = SyncedCharacter.objects.create(
+            character=self.alt_ownership,
+            manager=sync_manager
+        )
+
+        # run tests        
+        tasks.run_character_sync(synced_character.pk)
+
+        with self.assertRaises(SyncedCharacter.DoesNotExist):
+            SyncedCharacter.objects.get(pk=synced_character.pk)
+
 
     # run normal sync for a character
     @patch('standingssync.tasks.Token')
@@ -491,4 +534,95 @@ class TestStandingsSyncTasks(TestCase):
         self.assertEqual(
             sync_manager.last_error, 
             SyncManager.ERROR_TOKEN_INVALID            
+        )
+
+
+    def test_get_effective_standing(self):
+        
+        # create test data
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance,
+            character=self.main_ownership
+        )
+        contacts = [
+            {
+                'contact_id': 101,
+                'contact_type': 'character',
+                'standing': -10
+            },            
+            {
+                'contact_id': 201,
+                'contact_type': 'corporation',
+                'standing': 10
+            },
+            {
+                'contact_id': 301,
+                'contact_type': 'alliance',
+                'standing': 5
+            }
+        ]
+        for contact in contacts:
+            AllianceContact.objects.create(
+                manager=sync_manager,
+                contact_id = contact['contact_id'],
+                contact_type = contact['contact_type'],
+                standing = contact['standing'],
+            )
+        
+        # test
+        c1 = EveCharacter(
+            character_id = 101,
+            character_name = "Char 1",
+            corporation_id = 201,
+            corporation_name = "Corporation 1",
+            corporation_ticker = "C1"
+        )
+
+        self.assertEqual(
+            sync_manager.get_effective_standing(c1),
+            -10
+        )
+
+        c2 = EveCharacter(
+            character_id = 102,
+            character_name = "Char 2",
+            corporation_id = 201,
+            corporation_name = "Corporation 1",
+            corporation_ticker = "C1"
+        )
+
+        self.assertEqual(
+            sync_manager.get_effective_standing(c2),
+            10
+        )
+        c3 = EveCharacter(
+            character_id = 103,
+            character_name = "Char 3",
+            corporation_id = 203,
+            corporation_name = "Corporation 3",
+            corporation_ticker = "C2",
+            alliance_id = 301,
+            alliance_name = "Alliance 1",
+            alliance_ticker = "A1"
+        )
+
+        self.assertEqual(
+            sync_manager.get_effective_standing(c3),
+            5
+        )
+
+        c4 = EveCharacter(
+            character_id = 103,
+            character_name = "Char 3",
+            corporation_id = 203,
+            corporation_name = "Corporation 3",
+            corporation_ticker = "C2",
+            alliance_id = 302,
+            alliance_name = "Alliance 2",
+            alliance_ticker = "A2"
+        )
+
+        self.assertEqual(
+            sync_manager.get_effective_standing(c4),
+            0
         )

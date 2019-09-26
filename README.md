@@ -12,7 +12,8 @@ Here is an high level overview of the main features:
 - Users can choose which of their characters shall be synchronized
 - Supports multiple alliances
 - Synchronization is ongoing until user chooses to remove character from synchronization
-- Should the user loose permissions or his token become invalid sync is deactivated for his characters
+- Should the user loose permissions or his token become invalid or a character loose alliance standing sync is deactivated for those characters
+- User can only add sync to characters that have good standing with the alliance
 
 ## Screenshot
 

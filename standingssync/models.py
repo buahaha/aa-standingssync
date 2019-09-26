@@ -1,6 +1,6 @@
 from django.db import models
 from allianceauth.authentication.models import CharacterOwnership
-from allianceauth.eveonline.models import EveAllianceInfo
+from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
 
 
 class SyncManager(models.Model):
@@ -49,6 +49,28 @@ class SyncManager(models.Model):
     def get_last_error_message(self):
         msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
         return msg[0][1] if len(msg) > 0 else 'Undefined error'
+
+    def get_effective_standing(self, character: EveCharacter):
+        """ return the effective standing with this alliance"""
+        
+        contacts = AllianceContact.objects.filter(manager=self)
+
+        # check if character is in contacts
+        c = [x for x in contacts 
+            if x.contact_id == int(character.character_id)
+        ]
+        # else check if character's corporation is in contacts
+        if not c:
+            c = [x for x in contacts 
+                if x.contact_id == int(character.corporation_id)
+            ]
+            # else check if character's alliances is in contacts
+            if character.alliance_id is not None and not c:
+                c = [x for x in contacts 
+                    if x.contact_id == int(character.alliance_id)
+                ]
+        
+        return c.pop().standing if c else 0
     
     @staticmethod
     def get_esi_scopes() -> list:

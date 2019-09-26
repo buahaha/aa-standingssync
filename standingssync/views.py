@@ -132,7 +132,7 @@ def add_character(request, token):
         sync_manager = SyncManager.objects.get(alliance=alliance)
     except EveAllianceInfo.DoesNotExist:
         raise RuntimeError("can not find sync manager for alliance")
-    
+        
     token_char = EveCharacter.objects.get(character_id=token.character_id)
     if token_char.alliance_id == sync_manager.character.character.alliance_id:
         messages.warning(
@@ -140,7 +140,8 @@ def add_character(request, token):
             ('Adding alliance members does not make much sense, '
                 + 'since they already have access to alliance contacts.')
         )
-    else:                
+
+    else:
         try:
             owned_char = CharacterOwnership.objects.get(
                 user=request.user,
@@ -152,15 +153,26 @@ def add_character(request, token):
                 'Could not find character {}'.format(token_char.character_name)    
             )
         else:
-            alt, created = SyncedCharacter.objects.get_or_create(
-                character=owned_char,
-                manager=sync_manager
-            )
-            tasks.run_character_sync.delay(alt.pk)
-            messages.success(
-                request, 
-                'Sync activated for {}!'.format(token_char.character_name)
-            )    
+            if sync_manager.get_effective_standing(owned_char.character) <= 0:
+                messages.warning(
+                    request,
+                    'Can not activate sync for your character {} '.format(
+                        token_char.character_name
+                    )   
+                    + ', because it does not have blue standing '
+                    + 'with the alliance. Please first obtain blue '
+                    + 'standing for your character and then try again.'
+                )
+            else:
+                sync_character, created = SyncedCharacter.objects.get_or_create(
+                    character=owned_char,
+                    manager=sync_manager
+                )
+                tasks.run_character_sync.delay(sync_character.pk)
+                messages.success(
+                    request, 
+                    'Sync activated for {}!'.format(token_char.character_name)
+                )    
     return redirect('standingssync:index')
 
 
