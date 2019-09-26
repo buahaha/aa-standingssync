@@ -1,10 +1,14 @@
 # standingssync
 
-This is a plugin app for Alliance Auth. It allows users to have the current alliance standings on their non-alliance characters (e.g. alts).
+This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth). Users can choose to get the current alliance standings on their non-alliance characters (e.g. alts).
+
+![License](https://img.shields.io/badge/license-MIT-green) ![python](https://img.shields.io/badge/python-3.5-informational) ![AA](https://img.shields.io/badge/AllianceAuth-2.2-informational)
 
 Current status: **BETA**
 
 ## Features
+
+The main purpose of this app is to enable non-alliance characters to have the same standings view than their alliance main.
 
 Here is an high level overview of the main features:
 
