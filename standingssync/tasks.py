@@ -327,6 +327,12 @@ def run_manager_sync(manager_pk, force_sync = False):
                         len(contacts)
                     ))
                 )
+                # add this alliance with max standing to contacts
+                contacts.append({
+                    'contact_id': sync_manager.character.character.alliance_id,
+                    'contact_type': 'alliance',
+                    'standing': 10
+                })         
                 with transaction.atomic():
                     AllianceContact.objects.filter(manager=sync_manager).delete()
                     for contact in contacts:
