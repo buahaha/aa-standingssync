@@ -52,7 +52,8 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
 class SyncManagerAdmin(admin.ModelAdmin):
     list_display = (
         'alliance_name', 
-        'contacts_count', 
+        'contacts_count',
+        'synced_characters_count', 
         'user', 
         'character_name',         
         'version_hash', 
@@ -74,7 +75,14 @@ class SyncManagerAdmin(admin.ModelAdmin):
         return obj.character.character.alliance_name
 
     def contacts_count(self, obj):
-        return AllianceContact.objects.filter(manager=obj).count()
+        return '{:,}'.format(
+            AllianceContact.objects.filter(manager=obj).count()
+        )
+
+    def synced_characters_count(self, obj):
+        return '{:,}'.format(
+            SyncedCharacter.objects.filter(manager=obj).count()
+        )
 
     # This will help you to disbale add functionality
     def has_add_permission(self, request):
