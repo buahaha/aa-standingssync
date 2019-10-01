@@ -1,6 +1,6 @@
 # standingssync
 
-This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth). Users can choose to get the current alliance standings on their non-alliance characters (e.g. alts).
+This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth) for synchronizing alliance contacts to non-alliance characters.
 
 ![License](https://img.shields.io/badge/license-MIT-green) ![python](https://img.shields.io/badge/python-3.5-informational) ![AA](https://img.shields.io/badge/AllianceAuth-2.2-informational)
 
@@ -8,17 +8,14 @@ Current status: **BETA**
 
 ## Features
 
-The main purpose of this app is to enable non-alliance characters to have the same standings view than their alliance main.
+The main purpose of this app is to enable non-alliance characters to have the same standings view of other pilots than their alliance main. This e.g. allows non-alliance scouts to correctly report blues and non-blues. And is allows JF pilots to, which other non-alliance characters on grid are actually blues and which are not and therefore a potential threat.
 
 Here is an high level overview of the main features:
 
-- Synchronize alliance standings / contacts to non-alliance characters
-- Users can choose which of their characters shall be synchronized
-- Supports multiple alliances
+- Synchronize alliance contacts to chosen non-alliance characters
 - Synchronization is ongoing until user chooses to remove character from synchronization
-- Should the user loose permissions or his token become invalid or a character loose alliance standing sync is deactivated for those characters
-- User can only add sync to characters that have good standing with the alliance
-- Synced alliance has always +10
+- Supports multiple alliances
+- Synchronization automatically ceases once the user is no longer eligible
 
 ## Screenshot
 
@@ -118,3 +115,7 @@ Admins will find a "Standings Sync" section on the admin page. This section prov
 - Manually remove characters / alliances from sync
 
 - Manually start the sync process for characters / alliances
+
+## Bugs, Issues and Feature Requests
+
+If you encounter any bugs or would like to request a new feature please open an issue in this gitlab repo.
