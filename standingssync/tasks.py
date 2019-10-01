@@ -8,6 +8,7 @@ from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 from esi.clients import esi_client_factory
 from django.db import transaction
+from django.contrib.auth.models import User
 from allianceauth.notifications import notify
 from .models import SyncManager, SyncedCharacter, AllianceContact
 from .app_settings import *
@@ -230,16 +231,18 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
 
 
 @shared_task
-def run_manager_sync(manager_pk, force_sync = False):
+def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
     """sync contacts and related characters for one manager
 
     Args:
         manage_pk: primary key of sync manager to run sync for
         force_sync: will ignore version_hash if set to true
+        user_pk: user to send a completion report to (optional)
 
     Returns:
         None
     """
+    # todo: include all possible errors in result notification to user
 
     try:
         sync_manager = SyncManager.objects.get(pk=manager_pk)
@@ -261,7 +264,7 @@ def run_manager_sync(manager_pk, force_sync = False):
             sync_manager.last_error = SyncManager.ERROR_NO_CHARACTER
             sync_manager.save()
             return
-
+        
         # abort if character does not have sufficient permissions
         if not sync_manager.character.user.has_perm(
                 'standingssync.add_syncmanager'
@@ -366,6 +369,7 @@ def run_manager_sync(manager_pk, force_sync = False):
 
             sync_manager.last_error = SyncManager.ERROR_NONE
             sync_manager.save()
+            success = True
         
         except Exception as ex:
             logger.error(
@@ -374,7 +378,28 @@ def run_manager_sync(manager_pk, force_sync = False):
             )
             sync_manager.last_error = SyncManager.ERROR_UNKNOWN
             sync_manager.save()
-            raise ex
+            success = False
+        
+        else:            
+            if user_pk:    
+                message = 'Syncing of alliance contacts for "{}" {}.\n'.format(
+                    sync_manager.alliance,
+                    'completed successfully' if success else 'has failed'
+                )
+                if success:
+                    message += '{:,} contacts synced.'.format(
+                        sync_manager.alliancecontact_set.count()
+                    )
+                
+                notify(
+                    user=User.objects.get(pk=user_pk),
+                    title='Standings Sync: Alliance sync for {}: {}'.format(
+                        sync_manager.alliance,
+                        'OK' if success else 'FAILED'
+                    ),
+                    message=message,
+                    level='success' if success else 'danger'
+                )
 
 
 @shared_task

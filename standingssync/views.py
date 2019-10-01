@@ -108,14 +108,17 @@ def add_alliance_manager(request, token):
                 'character': owned_char
             }
         )  
-        tasks.run_manager_sync.delay(sync_manager.pk)
+        tasks.run_manager_sync.delay(
+            manager_pk=sync_manager.pk, 
+            user_pk=request.user.pk
+        )
         messages.success(
             request, 
             '{} set as alliance character for {}. '.format(
                     sync_manager.character.character.character_name, 
                     alliance.alliance_name
                 )
-            + 'Started syncing of alliance contacts.'
+            + 'Started syncing of alliance contacts. You will receive a report once it is completed.'
         )
     return redirect('standingssync:index')
 

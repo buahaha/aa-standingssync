@@ -66,22 +66,22 @@ class SyncManagerAdmin(admin.ModelAdmin):
     actions = ['start_sync_managers']
 
     def user(self, obj):
-        return obj.character.user
+        return obj.character.user if obj.character else None
 
     def character_name(self, obj):
         return obj.__str__()
 
     def alliance_name(self, obj):
-        return obj.character.character.alliance_name
+        return obj.alliance.alliance_name
 
     def contacts_count(self, obj):
         return '{:,}'.format(
-            AllianceContact.objects.filter(manager=obj).count()
+            obj.alliancecontact_set.count()            
         )
 
     def synced_characters_count(self, obj):
         return '{:,}'.format(
-            SyncedCharacter.objects.filter(manager=obj).count()
+            obj.syncedcharacter_set.count()            
         )
 
     # This will help you to disbale add functionality
@@ -92,12 +92,19 @@ class SyncManagerAdmin(admin.ModelAdmin):
                 
         names = list()
         for obj in queryset:            
-            tasks.run_manager_sync.delay(manager_pk=obj.pk, force_sync=True)
+            tasks.run_manager_sync.delay(
+                manager_pk=obj.pk, 
+                force_sync=True,
+                user_pk=request.user.pk
+            )
             names.append(str(obj))
     
+        text = 'Started syncing for: {} '.format(', '.join(names))
+        text += 'You will receive a report once it is completed.'
+
         self.message_user(
             request, 
-            'Started syncing for: {}'.format(', '.join(names))
+            text
         )
         
     start_sync_managers.short_description = "Sync selected managers"
