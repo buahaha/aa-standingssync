@@ -358,7 +358,9 @@ class TestStandingsSyncTasks(TestCase):
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance
         )
-        tasks.run_manager_sync(sync_manager.pk)
+        self.assertFalse(
+            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user.pk)
+        )
         sync_manager.refresh_from_db()
         self.assertEqual(
             sync_manager.last_error, 
@@ -414,7 +416,9 @@ class TestStandingsSyncTasks(TestCase):
         )
 
         # run manager sync
-        tasks.run_manager_sync(sync_manager.pk)
+        self.assertTrue(
+            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user.pk)
+        )
 
         sync_manager.refresh_from_db()
         self.assertEqual(
@@ -494,7 +498,7 @@ class TestStandingsSyncTasks(TestCase):
         )
 
         # run manager sync
-        tasks.run_manager_sync(sync_manager.pk)
+        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
 
         sync_manager.refresh_from_db()
         self.assertEqual(
@@ -528,7 +532,7 @@ class TestStandingsSyncTasks(TestCase):
         )
 
         # run manager sync
-        tasks.run_manager_sync(sync_manager.pk)
+        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
 
         sync_manager.refresh_from_db()
         self.assertEqual(

@@ -240,17 +240,18 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
         user_pk: user to send a completion report to (optional)
 
     Returns:
-        None
+        True on success or False on error
     """
-    # todo: include all possible errors in result notification to user
-
+    
     try:
         sync_manager = SyncManager.objects.get(pk=manager_pk)
     except SyncManager.DoesNotExist:        
         raise SyncManager.DoesNotExist(
             'task called for non existing manager with pk {}'.format(manager_pk)
         )
-    else:
+        return False
+    
+    try:
         addTag = makeLoggerTag(sync_manager)
 
         current_version_hash = sync_manager.version_hash
@@ -258,26 +259,26 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
 
         if sync_manager.character is None:
             logger.error(addTag(
-                'No character configured to sync alliance contacts. ' 
-                + 'Sync aborted'
+                'No character configured to sync the alliance'
             ))
             sync_manager.last_error = SyncManager.ERROR_NO_CHARACTER
             sync_manager.save()
-            return
+            raise ValueError()
         
         # abort if character does not have sufficient permissions
         if not sync_manager.character.user.has_perm(
                 'standingssync.add_syncmanager'
             ):
             logger.error(addTag(
-                'Character does not have sufficient permission to sync contacts'
+                'Character does not have sufficient permission '
+                + 'to sync the alliance'
             ))
             sync_manager.last_error = SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
             sync_manager.save()
-            return
+            raise ValueError()
 
-        # get token    
-        try:
+        try:            
+            # get token    
             token = Token.objects.filter(
                 user=sync_manager.character.user, 
                 character_id=sync_manager.character.character.character_id
@@ -290,12 +291,12 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
             ))
             sync_manager.last_error = SyncManager.ERROR_TOKEN_INVALID
             sync_manager.save()
-            return
+            raise TokenInvalidError()
             
         except TokenExpiredError:
             sync_manager.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
             sync_manager.save()
-            return
+            raise TokenExpiredError()
         
         try:
             # fetching data from ESI
@@ -326,8 +327,8 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
                 json.dumps(contacts).encode('utf-8')
             ).hexdigest()
             if force_sync or new_version_hash != current_version_hash:
-                logger.info(
-                    addTag('Storing alliance update with {:,} contacts'.format(
+                logger.info(addTag(
+                    'Storing alliance update with {:,} contacts'.format(
                         len(contacts)
                     ))
                 )                
@@ -369,37 +370,48 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
 
             sync_manager.last_error = SyncManager.ERROR_NONE
             sync_manager.save()
-            success = True
-        
+            
         except Exception as ex:
-            logger.error(
+            logger.error(addTag(
                 'An unexpected error ocurred while trying to '
-                + 'update contacts: {}'. format(ex)
-            )
+                + 'sync alliance: {}'. format(ex)
+            ))
             sync_manager.last_error = SyncManager.ERROR_UNKNOWN
             sync_manager.save()
-            success = False
+            raise RuntimeError()
+
+    except Exception as ex:
+        success = False        
+    else:
+        success = True
         
-        else:            
-            if user_pk:    
-                message = 'Syncing of alliance contacts for "{}" {}.\n'.format(
+    if user_pk:
+        try:
+            message = 'Syncing of alliance contacts for "{}" {}.\n'.format(
+                sync_manager.alliance,
+                'completed successfully' if success else 'has failed'
+            )
+            if success:
+                message += '{:,} contacts synced.'.format(
+                    sync_manager.alliancecontact_set.count()
+                )
+            
+            notify(
+                user=User.objects.get(pk=user_pk),
+                title='Standings Sync: Alliance sync for {}: {}'.format(
                     sync_manager.alliance,
-                    'completed successfully' if success else 'has failed'
-                )
-                if success:
-                    message += '{:,} contacts synced.'.format(
-                        sync_manager.alliancecontact_set.count()
-                    )
-                
-                notify(
-                    user=User.objects.get(pk=user_pk),
-                    title='Standings Sync: Alliance sync for {}: {}'.format(
-                        sync_manager.alliance,
-                        'OK' if success else 'FAILED'
-                    ),
-                    message=message,
-                    level='success' if success else 'danger'
-                )
+                    'OK' if success else 'FAILED'
+                ),
+                message=message,
+                level='success' if success else 'danger'
+            )
+        except Exception as ex:
+            logger.error(addTag(
+                'An unexpected error ocurred while trying to '
+                + 'report to user: {}'. format(ex)
+            ))
+    
+    return success
 
 
 @shared_task
