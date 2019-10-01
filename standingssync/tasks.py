@@ -10,10 +10,11 @@ from esi.clients import esi_client_factory
 from django.db import transaction
 from allianceauth.notifications import notify
 from .models import SyncManager, SyncedCharacter, AllianceContact
+from .app_settings import *
 
 
-# add custom tag to logger with name of this app
 class LoggerAdapter(logging.LoggerAdapter):
+    """add custom tag to logger with name of this app"""
     def __init__(self, logger, prefix):
         super(LoggerAdapter, self).__init__(logger, {})
         self.prefix = prefix
@@ -42,6 +43,7 @@ get_alliances_alliance_id_contacts
 def makeLoggerTag(tag: str):
     """creates a function to add logger tags"""
     return lambda text : '{}: {}'.format(tag, text)
+
 
 def chunks(lst, size):
     """Yield successive size-sized chunks from lst."""
@@ -136,7 +138,7 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             synced_character.delete()
             return
 
-        if manager.get_effective_standing(synced_character.character.character) <= 0:
+        if manager.get_effective_standing(synced_character.character.character) < STANDINGSSYNC_CHAR_MIN_STANDING:
             notify(
                 user, 
                 issue_title, 
@@ -316,29 +318,32 @@ def run_manager_sync(manager_pk, force_sync = False):
                 ).result()
 
             
-            # calc MD5 hash on contacts    
+            # determine if contacts have changed by comparing their hashes
             new_version_hash = hashlib.md5(
                 json.dumps(contacts).encode('utf-8')
             ).hexdigest()
-
             if force_sync or new_version_hash != current_version_hash:
                 logger.info(
                     addTag('Storing alliance update with {:,} contacts'.format(
                         len(contacts)
                     ))
-                )
-                # add this alliance with max standing to contacts
-                contacts.append({
-                    'contact_id': sync_manager.character.character.alliance_id,
+                )                
+                contacts_unique = {int(c['contact_id']): c for c in contacts}
+                
+                # add the sync alliance with max standing to contacts
+                alliance_id = int(sync_manager.character.character.alliance_id)
+                contacts_unique[alliance_id] = {
+                    'contact_id': alliance_id,
                     'contact_type': 'alliance',
                     'standing': 10
-                })         
+                }
+                
                 with transaction.atomic():
                     AllianceContact.objects.filter(manager=sync_manager).delete()
-                    for contact in contacts:
+                    for contact_id, contact in contacts_unique.items():
                         AllianceContact.objects.create(
                             manager=sync_manager,
-                            contact_id=contact['contact_id'],
+                            contact_id=contact_id,
                             contact_type=contact['contact_type'],
                             standing=contact['standing']                        
                         )

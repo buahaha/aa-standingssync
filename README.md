@@ -89,15 +89,23 @@ Finally you need to set the alliance character that will be used for fetching th
 Once an alliance character is set the app will immediately start fetching alliance contacts. Wait a minute and then reload the page to see the result.
 
 That's it. The Standing Sync app is fully installed and ready to be used.
-  
+
+## Settings
+
+Here is a list of available settings for this app. They can be configured by adding them to your AA settings file (`local.py`). If they are not set the defaults are used.
+
+Name | Description | Default
+-- | -- | --
+`STANDINGSSYNC_CHAR_MIN_STANDING`| minimum standing a character needs to have with the alliance to be able to sync | `0.1`<br>*this means it has to have some blue standing, neutrals will rejected* | No
+
 ## Permissions
 
 This app only uses two permission. One for enabling this app for users and one for enabling users to add alliances for syncing.
 
-Purpose | name | code
+Name | Purpose | Code
 -- | -- | --
-Enabling the app for a user. This permission should be enabled for everyone who is allowed to use the app (e.g. Member state) | Can add synced character | add_syncedcharacter
-Enables adding alliances for syncing by setting the character for fetching alliance contacts. This should be limited to users with admins / leadership privileges. | Can add alliance manager | add_alliancemanager
+Can add synced character |Enabling the app for a user. This permission should be enabled for everyone who is allowed to use the app (e.g. Member state) |  `add_syncedcharacter`
+Can add alliance manager |Enables adding alliances for syncing by setting the character for fetching alliance contacts. This should be limited to users with admins / leadership privileges. |  `add_alliancemanager`
 
 ## Admin functions
 

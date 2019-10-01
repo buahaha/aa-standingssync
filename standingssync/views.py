@@ -9,11 +9,13 @@ from esi.decorators import token_required
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from .models import *
 from . import tasks
+from .app_settings import *
 
 
 @login_required
 @permission_required('standingssync.add_syncedcharacter')
 def index(request):        
+    """main page"""
     try:        
         alliance = EveAllianceInfo.objects.get(
             alliance_id=request.user.profile.main_character.alliance_id
@@ -63,7 +65,7 @@ def index(request):
 @permission_required('standingssync.add_alliancemanager')
 @token_required(SyncManager.get_esi_scopes())
 def add_alliance_manager(request, token):
-    
+    """add or update sync manager for an alliance"""
     success = True
     token_char = EveCharacter.objects.get(character_id=token.character_id)
 
@@ -100,15 +102,17 @@ def add_alliance_manager(request, token):
             alliance.save()
 
     if success:
-        sync_manager, created = SyncManager.objects.get_or_create(                
+        sync_manager, created = SyncManager.objects.update_or_create(    
             alliance=alliance,
-            character=owned_char
+            defaults={
+                'character': owned_char
+            }
         )  
         tasks.run_manager_sync.delay(sync_manager.pk)
         messages.success(
             request, 
             '{} set as alliance character for {}. '.format(
-                    sync_manager.character, 
+                    sync_manager.character.character.character_name, 
                     alliance.alliance_name
                 )
             + 'Started syncing of alliance contacts.'
@@ -120,7 +124,7 @@ def add_alliance_manager(request, token):
 @permission_required('standingssync.add_syncedcharacter')
 @token_required(scopes=SyncedCharacter.get_esi_scopes())
 def add_character(request, token):
-    
+    """add character to receive alliance contacts"""
     try:        
         alliance = EveAllianceInfo.objects.get(
             alliance_id=request.user.profile.main_character.alliance_id
@@ -153,7 +157,7 @@ def add_character(request, token):
                 'Could not find character {}'.format(token_char.character_name)    
             )
         else:
-            if sync_manager.get_effective_standing(owned_char.character) <= 0:
+            if sync_manager.get_effective_standing(owned_char.character) < STANDINGSSYNC_CHAR_MIN_STANDING:
                 messages.warning(
                     request,
                     'Can not activate sync for your character {} '.format(
@@ -164,9 +168,11 @@ def add_character(request, token):
                     + 'standing for your character and then try again.'
                 )
             else:
-                sync_character, created = SyncedCharacter.objects.get_or_create(
+                sync_character, created = SyncedCharacter.objects.update_or_create(
                     character=owned_char,
-                    manager=sync_manager
+                    defaults={
+                        'manager':sync_manager
+                    }
                 )
                 tasks.run_character_sync.delay(sync_character.pk)
                 messages.success(
@@ -179,6 +185,7 @@ def add_character(request, token):
 @login_required
 @permission_required('standingssync.add_syncedcharacter')
 def remove_character(request, alt_pk):
+    """remove character from receiving alliance contacts"""
     alt = SyncedCharacter.objects.get(pk=alt_pk)
     alt_name = alt.character.character.character_name
     alt.delete()
