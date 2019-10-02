@@ -254,7 +254,6 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
     try:
         addTag = makeLoggerTag(sync_manager)
 
-        current_version_hash = sync_manager.version_hash
         alliance_name = sync_manager.alliance.alliance_name
 
         if sync_manager.character is None:
@@ -326,7 +325,7 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
             new_version_hash = hashlib.md5(
                 json.dumps(contacts).encode('utf-8')
             ).hexdigest()
-            if force_sync or new_version_hash != current_version_hash:
+            if force_sync or new_version_hash != sync_manager.version_hash:
                 logger.info(addTag(
                     'Storing alliance update with {:,} contacts'.format(
                         len(contacts)

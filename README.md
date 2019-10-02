@@ -1,10 +1,8 @@
 # standingssync
 
-This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth) for synchronizing alliance contacts to non-alliance characters.
+This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth), which enables synchronizing of alliance contacts to non-alliance characters.
 
 ![License](https://img.shields.io/badge/license-MIT-green) ![python](https://img.shields.io/badge/python-3.5-informational) ![AA](https://img.shields.io/badge/AllianceAuth-2.2-informational)
-
-Current status: **BETA**
 
 ## Features
 
