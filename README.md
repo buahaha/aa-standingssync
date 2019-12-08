@@ -2,7 +2,6 @@
 
 This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth), which enables non-alliance characters like scout alts to have the same standings view in game as their alliance main.
 
-![License](https://img.shields.io/badge/license-MIT-green) ![python](https://img.shields.io/badge/python-3.5-informational) ![AA](https://img.shields.io/badge/AllianceAuth-2.2-informational)
 
 ## Features
 
