@@ -253,8 +253,10 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
     
     try:
         addTag = makeLoggerTag(sync_manager)
-
         alliance_name = sync_manager.alliance.alliance_name
+
+        sync_manager.last_sync = datetime.datetime.now(datetime.timezone.utc)
+        sync_manager.save()
 
         if sync_manager.character is None:
             logger.error(addTag(
@@ -351,9 +353,6 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
                             standing=contact['standing']                        
                         )
                     sync_manager.version_hash = new_version_hash
-                    sync_manager.last_sync = datetime.datetime.now(
-                        datetime.timezone.utc
-                    )
                     sync_manager.save()
             else:
                 logger.info(addTag('Alliance contacts are unchanged.'))

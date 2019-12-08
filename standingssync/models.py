@@ -72,8 +72,8 @@ class SyncManager(models.Model):
         
         return c.pop().standing if c else 0
     
-    @staticmethod
-    def get_esi_scopes() -> list:
+    @classmethod
+    def get_esi_scopes(cls) -> list:
         return ['esi-alliances.read_contacts.v1']
 
 

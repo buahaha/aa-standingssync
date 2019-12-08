@@ -1,15 +1,19 @@
 import logging
-import sys
 import math
-from django.test import TestCase
+import sys
 from unittest.mock import Mock, patch
+
 from django.contrib.auth.models import User, Permission 
-from esi.models import Token, Scope
-from esi.errors import TokenExpiredError, TokenInvalidError
+from django.test import TestCase
+
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from allianceauth.authentication.models import CharacterOwnership
+from esi.models import Token, Scope
+from esi.errors import TokenExpiredError, TokenInvalidError
+
 from . import tasks
 from .models import *
+
 
 # reconfigure logger so we get logging from tasks to console during test
 c_handler = logging.StreamHandler(sys.stdout)
@@ -17,36 +21,35 @@ logger = logging.getLogger('standingssync.tasks')
 logger.level = logging.DEBUG
 logger.addHandler(c_handler)
 
+
 class TestStandingsSyncTasks(TestCase):
     
     # note: setup is making calls to ESI to get full info for entities
     # all ESI calls in the tested module are mocked though
 
-
-    @classmethod
-    def setUpClass(cls):
-        super(TestStandingsSyncTasks, cls).setUpClass()
+    
+    def setUp(self):
 
         # create environment
         # 1 user with 1 alt character        
-        cls.character = EveCharacter.objects.create_character(207150426)  
-        cls.alt = EveCharacter.objects.create_character(95328603)
-        cls.alliance = EveAllianceInfo.objects.create_alliance(
-            cls.character.alliance_id
+        self.character = EveCharacter.objects.create_character(207150426)  
+        self.alt = EveCharacter.objects.create_character(95328603)
+        self.alliance = EveAllianceInfo.objects.create_alliance(
+            self.character.alliance_id
         )        
-        cls.user = User.objects.create_user(cls.character.character_name)        
-        cls.main_ownership = CharacterOwnership.objects.create(
-            character=cls.character,
+        self.user = User.objects.create_user(self.character.character_name)        
+        self.main_ownership = CharacterOwnership.objects.create(
+            character=self.character,
             owner_hash='x1',
-            user=cls.user
+            user=self.user
         )
-        cls.alt_ownership =CharacterOwnership.objects.create(
-            character=cls.alt,
+        self.alt_ownership =CharacterOwnership.objects.create(
+            character=self.alt,
             owner_hash='x2',
-            user=cls.user
+            user=self.user
         )                
         # 12 ESI contacts
-        cls.contacts = [
+        self.contacts = [
             {
                 'contact_id': 95328603,
                 'contact_type': 'character',
@@ -429,11 +432,15 @@ class TestStandingsSyncTasks(TestCase):
         # should have tried to fetch contacts
         self.assertEqual(mock_operation.result.call_count, 3)
 
-        # should be number of contacts stored in DV
-        self.assertEqual(
-            AllianceContact.objects.filter(manager=sync_manager).count(),
-            len(self.contacts)
-        )
+        base_contact_ids = {x['contact_id'] for x in self.contacts}
+        base_contact_ids.add(self.character.alliance_id)
+
+        alliance_contact_ids = {
+            x.contact_id 
+            for x in AllianceContact.objects.filter(manager=sync_manager)
+        }
+        
+        self.assertSetEqual(base_contact_ids, alliance_contact_ids)
 
     
     # normal synch of new contacts

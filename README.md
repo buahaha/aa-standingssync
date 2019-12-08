@@ -1,12 +1,12 @@
 # standingssync
 
-This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth), which enables synchronizing of alliance contacts to non-alliance characters.
+This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth), which enables non-alliance characters like scout alts to have the same standings view in game as their alliance main.
 
 ![License](https://img.shields.io/badge/license-MIT-green) ![python](https://img.shields.io/badge/python-3.5-informational) ![AA](https://img.shields.io/badge/AllianceAuth-2.2-informational)
 
 ## Features
 
-The main purpose of this app is to enable non-alliance characters to have the same standings view of other pilots than their alliance main. This e.g. allows non-alliance scouts to correctly report blues and non-blues. And is allows JF pilots to, which other non-alliance characters on grid are actually blues and which are not and therefore a potential threat.
+The main purpose of this app is to enable non-alliance characters to have the same standings view of other pilots in game as their alliance main. This e.g. allows non-alliance scouts to correctly report blues and non-blues. And is allows JF pilots to, which other non-alliance characters on grid are actually blues and which are not and therefore a potential threat.
 
 Here is an high level overview of the main features:
 
