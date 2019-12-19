@@ -2,6 +2,18 @@
 
 This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth), which enables non-alliance characters like scout alts to have the same standings view in game as their alliance main.
 
+## Content
+
+- [Features](#features)
+- [Screenshot](#creenshot)
+- [How it works](#how-it-works)
+- [Installation](#installation)
+- [Updating](#updating)
+- [Settings](#settings)
+- [Permissions](#permissions)
+- [Admin Functions](#Admin-functions)
+- [Feedback](#feedback)
+- [Change Log](CHANGELOG.md)
 
 ## Features
 
@@ -84,6 +96,26 @@ Once an alliance character is set the app will immediately start fetching allian
 
 That's it. The Standing Sync app is fully installed and ready to be used.
 
+## Updating
+
+To update your existing installation of Alliance Freight first enable your virtual environment.
+
+Then run the following commands from your AA project directory (the one that contains `manage.py`).
+
+```bash
+pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync.git -U
+```
+
+```bash
+python manage.py migrate
+```
+
+```bash
+python manage.py collectstatic
+```
+
+Finally restart your AA supervisor services.
+
 ## Settings
 
 Here is a list of available settings for this app. They can be configured by adding them to your AA settings file (`local.py`). If they are not set the defaults are used.
@@ -113,6 +145,6 @@ Admins will find a "Standings Sync" section on the admin page. This section prov
 
 - Manually start the sync process for characters / alliances
 
-## Bugs, Issues and Feature Requests
+## Feedback
 
 If you encounter any bugs or would like to request a new feature please open an issue in this gitlab repo.
