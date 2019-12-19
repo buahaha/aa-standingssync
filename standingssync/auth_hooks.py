@@ -1,7 +1,7 @@
 from allianceauth.services.hooks import MenuItemHook, UrlHook
 from django.utils.translation import ugettext_lazy as _
 from allianceauth import hooks
-from . import urls
+from . import urls, __title__
 
 
 class standingssyncMenuItem(MenuItemHook):
@@ -10,7 +10,7 @@ class standingssyncMenuItem(MenuItemHook):
         # setup menu entry for sidebar
         MenuItemHook.__init__(
             self,
-            _('Standings Sync'),
+            _(__title__),
             'fa fa-address-card fa-fw',
             'standingssync:index',
             navactive=['standingssync:index']

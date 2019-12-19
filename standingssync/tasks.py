@@ -10,40 +10,13 @@ from esi.clients import esi_client_factory
 from django.db import transaction
 from django.contrib.auth.models import User
 from allianceauth.notifications import notify
-from .models import SyncManager, SyncedCharacter, AllianceContact
+
 from .app_settings import *
+from .models import SyncManager, SyncedCharacter, AllianceContact
+from .utils import LoggerAddTag, get_swagger_spec_path, make_logger_prefix
 
 
-class LoggerAdapter(logging.LoggerAdapter):
-    """add custom tag to logger with name of this app"""
-    def __init__(self, logger, prefix):
-        super(LoggerAdapter, self).__init__(logger, {})
-        self.prefix = prefix
-
-    def process(self, msg, kwargs):
-        return '[%s] %s' % (self.prefix, msg), kwargs
-
-logger = logging.getLogger(__name__)
-logger = LoggerAdapter(logger, __package__)
-
-
-SWAGGER_SPEC_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), 
-    'swagger.json'
-)
-"""
-Swagger spec operations:
-
-get_characters_character_id_contacts
-delete_characters_character_id_contacts
-post_characters_character_id_contacts
-get_alliances_alliance_id_contacts
-"""
-
-
-def makeLoggerTag(tag: str):
-    """creates a function to add logger tags"""
-    return lambda text : '{}: {}'.format(tag, text)
+logger = LoggerAddTag(logging.getLogger(__name__), __package__)
 
 
 def chunks(lst, size):
@@ -73,7 +46,7 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
                 sync_char_pk
             )
         )
-    addTag = makeLoggerTag(synced_character)
+    addTag = make_logger_prefix(synced_character)
     
     
     user = synced_character.character.user
@@ -111,10 +84,14 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
     else:        
         # get token
         try:
-            token = Token.objects.filter(
+            token = Token.objects\
+            .filter(
                 user=synced_character.character.user, 
                 character_id=synced_character.character.character.character_id
-            ).require_scopes(SyncedCharacter.get_esi_scopes()).require_valid().first()
+            )\
+            .require_scopes(SyncedCharacter.get_esi_scopes())\
+            .require_valid().first()
+
         except TokenInvalidError:
             logger.info(addTag(
                 'sync deactivated due to invalid token'
@@ -139,11 +116,16 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             synced_character.delete()
             return
 
-        if manager.get_effective_standing(synced_character.character.character) < STANDINGSSYNC_CHAR_MIN_STANDING:
+        if (manager.get_effective_standing(
+                synced_character.character.character
+            ) < STANDINGSSYNC_CHAR_MIN_STANDING
+        ):
             notify(
                 user, 
                 issue_title, 
-                issue_message('your character is no longer blue with the alliance')
+                issue_message(
+                    'your character is no longer blue with the alliance'
+                )
             )
             synced_character.delete()
             return
@@ -158,7 +140,7 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             logger.info(addTag('Updating contacts with new version'))            
             client = esi_client_factory(
                 token=token, 
-                spec_file=SWAGGER_SPEC_PATH
+                spec_file=get_swagger_spec_path()
             )            
                         
             # get contacts from first page
@@ -171,10 +153,12 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             
             # add contacts from additional pages if any            
             for page in range(2, pages + 1):
-                character_contacts += client.Contacts.get_characters_character_id_contacts(
-                    character_id=synced_character.character.character.character_id,
-                    page=page
-                ).result()
+                character_contacts += client.Contacts\
+                    .get_characters_character_id_contacts(
+                        character_id=\
+                            synced_character.character.character.character_id,
+                        page=page
+                    ).result()
                  
             # delete all current contacts via ESI
             max_items = 20
@@ -184,9 +168,10 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             )
             for contact_ids_chunk in contact_ids_chunks:
                 client.Contacts.delete_characters_character_id_contacts(
-                    character_id=synced_character.character.character.character_id,
-                    contact_ids=contact_ids_chunk
-                ).result()
+                        character_id=\
+                            synced_character.character.character.character_id,
+                        contact_ids=contact_ids_chunk
+                    ).result()
             
             # get alliance contacts grouped by their standing
             contacts = AllianceContact.objects.filter(
@@ -210,7 +195,8 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
                 )
                 for contact_ids_chunk in contact_ids_chunks:
                     client.Contacts.post_characters_character_id_contacts(
-                        character_id=synced_character.character.character.character_id,
+                        character_id=\
+                            synced_character.character.character.character_id,
                         contact_ids=contact_ids_chunk,
                         standing=contact.standing
                     ).result()    
@@ -252,7 +238,7 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
         return False
     
     try:
-        addTag = makeLoggerTag(sync_manager)
+        addTag = make_logger_prefix(sync_manager)
         alliance_name = sync_manager.alliance.alliance_name
 
         sync_manager.last_sync = datetime.datetime.now(datetime.timezone.utc)
@@ -280,12 +266,14 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
 
         try:            
             # get token    
-            token = Token.objects.filter(
-                user=sync_manager.character.user, 
-                character_id=sync_manager.character.character.character_id
-            ).require_scopes(
-                SyncManager.get_esi_scopes()
-            ).require_valid().first()
+            token = Token.objects\
+                .filter(
+                    user=sync_manager.character.user, 
+                    character_id=sync_manager.character.character.character_id
+                )\
+                .require_scopes(SyncManager.get_esi_scopes())\
+                .require_valid().first()
+
         except TokenInvalidError:        
             logger.error(addTag(
                 'Invalid token for fetching alliance contacts'
@@ -298,11 +286,20 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
             sync_manager.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
             sync_manager.save()
             raise TokenExpiredError()
+
+        else:
+            if not token:
+                sync_manager.last_error = SyncManager.ERROR_TOKEN_INVALID
+                sync_manager.save()
+                raise TokenInvalidError()
         
         try:
             # fetching data from ESI
             logger.info(addTag('Fetching alliance contacts from ESI - page 1'))
-            client = esi_client_factory(token=token, spec_file=SWAGGER_SPEC_PATH)
+            client = esi_client_factory(
+                token=token, 
+                spec_file=get_swagger_spec_path()
+            )
 
             # get contacts from first page
             operation = client.Contacts.get_alliances_alliance_id_contacts(
@@ -344,7 +341,9 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
                 }
                 
                 with transaction.atomic():
-                    AllianceContact.objects.filter(manager=sync_manager).delete()
+                    AllianceContact.objects\
+                        .filter(manager=sync_manager)\
+                        .delete()
                     for contact_id, contact in contacts_unique.items():
                         AllianceContact.objects.create(
                             manager=sync_manager,

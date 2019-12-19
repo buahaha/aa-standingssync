@@ -4,7 +4,8 @@ import sys
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User, Permission 
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
+from django.urls import reverse
 
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from allianceauth.authentication.models import CharacterOwnership
@@ -13,6 +14,7 @@ from esi.errors import TokenExpiredError, TokenInvalidError
 
 from . import tasks
 from .models import *
+from . import views
 
 
 # reconfigure logger so we get logging from tasks to console during test
@@ -370,14 +372,44 @@ class TestStandingsSyncTasks(TestCase):
             SyncManager.ERROR_NO_CHARACTER            
         )
 
+    @patch('standingssync.tasks.Token') 
+    def test_run_manager_sync_error_on_no_token(
+        self,
+        mock_Token
+    ):
+        mock_Token.objects.filter.return_value\
+            .require_scopes.return_value\
+            .require_valid.return_value\
+            .first.return_value = None
+        
+        p = Permission.objects\
+            .filter(codename='add_syncmanager')\
+            .first()
+        self.user.user_permissions.add(p)
+        self.user.save()
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance,
+            character=self.main_ownership
+        )
+        self.assertFalse(
+            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user.pk)
+        )
+        sync_manager.refresh_from_db()
+        self.assertEqual(
+            sync_manager.last_error, 
+            SyncManager.ERROR_TOKEN_INVALID            
+        )
+
 
     # normal synch of new contacts
+    @patch('standingssync.tasks.Token')
     @patch('standingssync.tasks.run_character_sync')
     @patch('standingssync.tasks.esi_client_factory')
     def test_run_manager_sync_normal(
             self, 
             mock_esi_client_factory, 
-            mock_run_character_sync
+            mock_run_character_sync,
+            mock_Token
         ):        
         # create mocks
         def get_contacts_page(*args, **kwargs):
@@ -403,10 +435,15 @@ class TestStandingsSyncTasks(TestCase):
         mock_esi_client_factory.return_value = mock_client        
         mock_run_character_sync.delay = Mock()
 
+        mock_Token.objects.filter.return_value\
+            .require_scopes.return_value\
+            .require_valid.return_value\
+            .first.return_value = Mock(spec=Token)
+
         # create test data
-        p = Permission.objects.filter(            
-            codename='add_syncmanager'
-        ).first()
+        p = Permission.objects\
+            .filter(codename='add_syncmanager')\
+            .first()
         self.user.user_permissions.add(p)
         self.user.save()
         sync_manager = SyncManager.objects.create(
@@ -637,3 +674,49 @@ class TestStandingsSyncTasks(TestCase):
             sync_manager.get_effective_standing(c4),
             0
         )
+
+class TestViews(TestCase):
+    
+    def setUp(self):
+        self.factory = RequestFactory()        
+        
+        self.character = EveCharacter.objects.create(
+            character_id=42,
+            character_name='John Doe',
+            corporation_id=142,
+            corporation_name='John Doe & Co.',
+            corporation_ticker='ABC'
+        )        
+        self.user = User.objects.create_user(
+            self.character.character_name,
+            'abc@example.com',
+            'password'
+        )
+        self.main_ownership = CharacterOwnership.objects.create(
+            character=self.character,
+            owner_hash='x1',
+            user=self.user
+        )     
+
+
+    def test_index_access(self):        
+        request = self.factory.get(reverse('standingssync:index'))
+        request.user = self.user
+        
+        response = views.index(request)
+        self.assertEqual(response.status_code, 302)
+
+
+    def test_index_normal(self):
+        p = Permission.objects.get(
+            codename='add_syncedcharacter', 
+            content_type__app_label=__package__
+        )
+        self.user.user_permissions.add(p)
+        self.user.save()
+        
+        request = self.factory.get(reverse('standingssync:index'))
+        request.user = self.user
+        
+        response = views.index(request)
+        self.assertEqual(response.status_code, 200)
