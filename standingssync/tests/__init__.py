@@ -9,6 +9,92 @@ from allianceauth.eveonline.models import (
 from allianceauth.tests.auth_utils import AuthUtils
 
 
+ESI_CONTACTS = [
+    {
+        'contact_id': 1002,
+        'contact_type': 'character',
+        'standing': 10.0
+    },
+    {
+        'contact_id': 1012,
+        'contact_type': 'character',
+        'standing': -10.0
+    },
+    {
+        'contact_id': 1013,
+        'contact_type': 'character',
+        'standing': -5.0
+    },
+    {
+        'contact_id': 1014,
+        'contact_type': 'character',
+        'standing': 0.0
+    },
+    {
+        'contact_id': 1015,
+        'contact_type': 'character',
+        'standing': 5.0
+    },
+    {
+        'contact_id': 1016,
+        'contact_type': 'character',
+        'standing': 10.0
+    },
+    {
+        'contact_id': 3011,
+        'contact_type': 'alliance',
+        'standing': -10.0
+    },    
+    {
+        'contact_id': 3012,
+        'contact_type': 'alliance',
+        'standing': -5.0
+    },
+    {
+        'contact_id': 3013,
+        'contact_type': 'alliance',
+        'standing': 0.0
+    },  
+    {
+        'contact_id': 3014,
+        'contact_type': 'alliance',
+        'standing': 5.0
+    },
+    {
+        'contact_id': 3015,
+        'contact_type': 'alliance',
+        'standing': 10.0
+    },    
+    {
+        'contact_id': 2011,
+        'contact_type': 'corporation',
+        'standing': -10.0
+    },
+    {
+        'contact_id': 2012,
+        'contact_type': 'corporation',
+        'standing': -5.0
+    },
+    {
+        'contact_id': 2014,
+        'contact_type': 'corporation',
+        'standing': 0.0
+    },
+    {
+        'contact_id': 2013,
+        'contact_type': 'corporation',
+        'standing': 5.0
+    },
+    {
+        'contact_id': 2015,
+        'contact_type': 'corporation',
+        'standing': 10.0
+    },
+]
+
+ESI_CONTACTS_BY_ID = {int(x['contact_id']): x for x in ESI_CONTACTS}
+
+
 def add_permission_to_user_by_name(
     app_label, codename, user, disconnect_signals=True
 ):

@@ -34,15 +34,12 @@ def index(request):
             sync_manager = None
 
     # get list of synced characters for this user
-    characters_query = SyncedCharacter.objects.select_related(
-        'character__character'
-    ).filter(character__user=request.user)
-
-    has_synced_chars = characters_query.count() > 0
+    characters_query = SyncedCharacter.objects\
+        .select_related('character__character')\
+        .filter(character__user=request.user)
 
     characters = list()
     for character in characters_query:                        
-
         characters.append({
             'portrait_url': character.character.character.portrait_url,
             'name': character.character.character.character_name,
@@ -51,17 +48,17 @@ def index(request):
             'pk': character.pk
         })
     
+    has_synced_chars = characters_query.count() > 0
     context = {        
         'app_title': __title__,
         'characters': characters,
         'has_synced_chars': has_synced_chars        
-    }        
-
+    }
     if sync_manager is not None:
         context['alliance'] = sync_manager.alliance
-        context['alliance_contacts_count'] = AllianceContact.objects.filter(
-            manager=sync_manager
-        ).count()
+        context['alliance_contacts_count'] = AllianceContact.objects\
+            .filter(manager=sync_manager)\
+            .count()
     else:
         context['alliance'] = None
         context['alliance_contacts_count'] = None
@@ -119,8 +116,7 @@ def add_alliance_manager(request, token):
             }
         )  
         tasks.run_manager_sync.delay(
-            manager_pk=sync_manager.pk, 
-            user_pk=request.user.pk
+            manager_pk=sync_manager.pk, user_pk=request.user.pk
         )
         messages_plus.success(
             request, 
@@ -155,8 +151,8 @@ def add_character(request, token):
     if token_char.alliance_id == sync_manager.character.character.alliance_id:
         messages_plus.warning(
             request,
-            ('Adding alliance members does not make much sense, '
-                + 'since they already have access to alliance contacts.')
+            'Adding alliance members does not make much sense, '
+            'since they already have access to alliance contacts.'
         )
 
     else:
@@ -177,12 +173,12 @@ def add_character(request, token):
             ):
                 messages_plus.warning(
                     request,
-                    'Can not activate sync for your character {} '.format(
+                    'Can not activate sync for your character {} '
+                    ', because it does not have blue standing '
+                    'with the alliance. Please first obtain blue '
+                    'standing for your character and then try again.'.format(
                         token_char.character_name
-                    )   
-                    + ', because it does not have blue standing '
-                    + 'with the alliance. Please first obtain blue '
-                    + 'standing for your character and then try again.'
+                    )
                 )
             else:
                 sync_character, created = SyncedCharacter.objects.update_or_create(

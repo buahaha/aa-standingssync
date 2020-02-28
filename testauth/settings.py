@@ -235,7 +235,7 @@ LOGGING = {
         },
         'django': {
             'handlers': ['log_file', 'console'],
-            'level': 'ERROR',
+            'level': 'CRITICAL',
         },
         'esi': {
             'handlers': ['log_file', 'console'],
@@ -310,3 +310,5 @@ DEFAULT_FROM_EMAIL = ''
 #######################################
 # Add any custom settings below here. #
 #######################################
+
+Logging = None

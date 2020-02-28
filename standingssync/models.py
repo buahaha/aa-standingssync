@@ -1,6 +1,13 @@
+import logging
+
 from django.db import models
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
+
+from .managers import AllianceContactManager
+from .utils import LoggerAddTag
+
+logger = LoggerAddTag(logging.getLogger(__name__), __package__)
 
 
 class SyncManager(models.Model):
@@ -49,10 +56,6 @@ class SyncManager(models.Model):
             self.alliance.alliance_name, 
             character_name
         )
-
-    def get_last_error_message(self):
-        msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
-        return msg[0][1] if len(msg) > 0 else 'Undefined error'
 
     def get_effective_standing(self, character: EveCharacter):
         """ return the effective standing with this alliance"""
@@ -116,13 +119,9 @@ class SyncedCharacter(models.Model):
     def __str__(self):
         return self.character.character.character_name
 
-    def get_last_error_message(self):
-        msg = [(x, y) for x, y in self.ERRORS_LIST if x == self.last_error]
-        return msg[0][1] if len(msg) > 0 else 'Undefined error'
-
     def get_status_message(self):
         if self.last_error != self.ERROR_NONE:
-            message = self.get_last_error_message()
+            message = self.get_last_error_display()
         elif self.last_sync is not None:            
             message = 'OK'
         else:
@@ -143,7 +142,9 @@ class AllianceContact(models.Model):
     manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
     contact_id = models.IntegerField()
     contact_type = models.CharField(max_length=32)
-    standing = models.FloatField()    
+    standing = models.FloatField()
+
+    objects = AllianceContactManager()
 
     def __str__(self):
         return '{}:{}'.format(self.contact_type, self.contact_id)
@@ -153,4 +154,4 @@ class AllianceContact(models.Model):
             models.UniqueConstraint(
                 fields=['manager', 'contact_id'], 
                 name="manager-contacts-unq")
-        ]        
+        ]
