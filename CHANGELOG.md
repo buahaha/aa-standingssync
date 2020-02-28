@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [1.0.2] - 2020-02-28
 
+### Added
+
+- Version number for this app now shown on admin site
+
 ### Fixed
 
 - Bug: Standing value was sometimes not synced correctly for contacts
