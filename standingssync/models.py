@@ -41,9 +41,13 @@ class SyncManager(models.Model):
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
     
     def __str__(self):
+        if self.character is not None:
+            character_name = self.character.character.character_name
+        else:
+            character_name = 'None'
         return '{} ({})'.format(
             self.alliance.alliance_name, 
-            self.character.character.character_name if self.character is not None else 'None'
+            character_name
         )
 
     def get_last_error_message(self):
@@ -56,17 +60,20 @@ class SyncManager(models.Model):
         contacts = AllianceContact.objects.filter(manager=self)
 
         # check if character is in contacts
-        c = [x for x in contacts 
+        c = [
+            x for x in contacts 
             if x.contact_id == int(character.character_id)
         ]
         # else check if character's corporation is in contacts
         if not c:
-            c = [x for x in contacts 
+            c = [
+                x for x in contacts 
                 if x.contact_id == int(character.corporation_id)
             ]
             # else check if character's alliances is in contacts
             if character.alliance_id is not None and not c:
-                c = [x for x in contacts 
+                c = [
+                    x for x in contacts 
                     if x.contact_id == int(character.alliance_id)
                 ]
         

@@ -1,32 +1,29 @@
-import logging
-import os
 import datetime
 import hashlib
 import json
+import logging
+
 from celery import shared_task
+
+from django.db import transaction
+from django.contrib.auth.models import User
+
+from allianceauth.notifications import notify
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 from esi.clients import esi_client_factory
-from django.db import transaction
-from django.contrib.auth.models import User
-from allianceauth.notifications import notify
 
-from .app_settings import *
+from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
 from .models import SyncManager, SyncedCharacter, AllianceContact
-from .utils import LoggerAddTag, get_swagger_spec_path, make_logger_prefix
-
+from .utils import (
+    LoggerAddTag, get_swagger_spec_path, make_logger_prefix, chunks
+)
 
 logger = LoggerAddTag(logging.getLogger(__name__), __package__)
 
 
-def chunks(lst, size):
-    """Yield successive size-sized chunks from lst."""
-    for i in range(0, len(lst), size):
-        yield lst[i: i + size]
-
-
 @shared_task
-def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
+def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
     """syncs contacts for one character
     
     Args:
@@ -38,6 +35,16 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
         None
     """
 
+    def issue_message(synced_character, message): 
+        return (
+            'Standings Sync has been deactivated for your '
+            'character {}, because {}.\n'
+            'Feel free to activate sync for your character again, '
+            'once the issue has been resolved.'.format(
+                synced_character, message
+            )
+        )
+
     try:
         synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
     except SyncedCharacter.DoesNotExist:
@@ -48,27 +55,24 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
         )
     addTag = make_logger_prefix(synced_character)
     
-    
     user = synced_character.character.user
     issue_title = 'Standings Sync deactivated for {}'.format(synced_character)
-    issue_message = lambda x: ('Standings Sync has been deactivated for your '
-        + 'character {}, because {}.\n'. format(synced_character, x)
-        + 'Feel free to activate sync for your character again, '
-        + 'once the issue has been resolved.')
+    
     # abort if owner does not have sufficient permissions
-    if not user.has_perm(
-            'standingssync.add_syncedcharacter'
-        ):        
+    if not user.has_perm('standingssync.add_syncedcharacter'):        
         logger.info(addTag(
             'sync deactivated due to insufficient user permissions'
         ))
         notify(
             user, 
             issue_title, 
-            issue_message('you no longer have permission for this service')
+            issue_message(
+                synced_character, 
+                'you no longer have permission for this service'
+            )
         )
         synced_character.delete()
-        return
+        return False
 
     # check if an update is needed
     if manager_pk is None:
@@ -76,8 +80,10 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
     else:
         manager = SyncManager.objects.get(pk=manager_pk)
 
-    if (not force_sync 
-            and manager.version_hash == synced_character.version_hash):
+    if (
+        not force_sync 
+        and manager.version_hash == synced_character.version_hash
+    ):
         logger.info(addTag(
             'contacts of this char are up-to-date, no sync required'
         ))
@@ -85,38 +91,38 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
         # get token
         try:
             token = Token.objects\
-            .filter(
-                user=synced_character.character.user, 
-                character_id=synced_character.character.character.character_id
-            )\
-            .require_scopes(SyncedCharacter.get_esi_scopes())\
-            .require_valid().first()
+                .filter(
+                    user=synced_character.character.user, 
+                    character_id=synced_character.character.character.character_id
+                )\
+                .require_scopes(SyncedCharacter.get_esi_scopes())\
+                .require_valid().first()
 
         except TokenInvalidError:
-            logger.info(addTag(
-                'sync deactivated due to invalid token'
-            ))
+            logger.info(addTag('sync deactivated due to invalid token'))
             notify(
                 user, 
                 issue_title, 
-                issue_message('your token is no longer valid')
+                issue_message(
+                    synced_character,
+                    'your token is no longer valid'
+                )
             )
             synced_character.delete()
-            return
+            return False
 
         except TokenExpiredError:
-            logger.info(addTag(
-                'sync deactivated due to expired token'
-            ))
+            logger.info(addTag('sync deactivated due to expired token'))
             notify(
                 user, 
                 issue_title, 
-                issue_message('your token has expired')
+                issue_message(synced_character, 'your token has expired')
             )
             synced_character.delete()
-            return
+            return False
 
-        if (manager.get_effective_standing(
+        if (
+            manager.get_effective_standing(
                 synced_character.character.character
             ) < STANDINGSSYNC_CHAR_MIN_STANDING
         ):
@@ -124,11 +130,12 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
                 user, 
                 issue_title, 
                 issue_message(
+                    synced_character,
                     'your character is no longer blue with the alliance'
                 )
             )
             synced_character.delete()
-            return
+            return False
         
         if token is None:
             synced_character.last_error = SyncedCharacter.ERROR_UNKNOWN
@@ -139,10 +146,8 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             # fetching data from ESI
             logger.info(addTag('Updating contacts with new version'))            
             client = esi_client_factory(
-                token=token, 
-                spec_file=get_swagger_spec_path()
-            )            
-                        
+                token=token, spec_file=get_swagger_spec_path()
+            )                                    
             # get contacts from first page
             operation = client.Contacts.get_characters_character_id_contacts(
                 character_id=synced_character.character.character.character_id
@@ -155,29 +160,25 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             for page in range(2, pages + 1):
                 character_contacts += client.Contacts\
                     .get_characters_character_id_contacts(
-                        character_id=\
-                            synced_character.character.character.character_id,
+                        character_id=synced_character.character.character.character_id,  # noqa
                         page=page
                     ).result()
                  
             # delete all current contacts via ESI
             max_items = 20
             contact_ids_chunks = chunks(
-                [x['contact_id'] for x in character_contacts], 
-                max_items
+                [x['contact_id'] for x in character_contacts], max_items
             )
             for contact_ids_chunk in contact_ids_chunks:
                 client.Contacts.delete_characters_character_id_contacts(
-                        character_id=\
-                            synced_character.character.character.character_id,
+                        character_id=synced_character.character.character.character_id,  # noqa
                         contact_ids=contact_ids_chunk
                     ).result()
             
             # get alliance contacts grouped by their standing
             contacts = AllianceContact.objects.filter(
                 manager=manager
-            )
-            
+            )            
             contacts_standing = dict()
             for contact in contacts:
                 standing = contact.standing
@@ -195,8 +196,7 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
                 )
                 for contact_ids_chunk in contact_ids_chunks:
                     client.Contacts.post_characters_character_id_contacts(
-                        character_id=\
-                            synced_character.character.character.character_id,
+                        character_id=synced_character.character.character.character_id,  # noqa
                         contact_ids=contact_ids_chunk,
                         standing=contact.standing
                     ).result()    
@@ -208,16 +208,18 @@ def run_character_sync(sync_char_pk, force_sync = False, manager_pk = None):
             )
             synced_character.last_error = SyncedCharacter.ERROR_NONE
             synced_character.save()
-        
+            
         except Exception as ex:
             logger.error('An unexpected error ocurred: {}'.format(ex))
             synced_character.last_error = SyncedCharacter.ERROR_UNKNOWN
             synced_character.save()
             raise
 
+    return True
+    
 
 @shared_task
-def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
+def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
     """sync contacts and related characters for one manager
 
     Args:
@@ -239,8 +241,7 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
     
     try:
         addTag = make_logger_prefix(sync_manager)
-        alliance_name = sync_manager.alliance.alliance_name
-
+        
         sync_manager.last_sync = datetime.datetime.now(datetime.timezone.utc)
         sync_manager.save()
 
@@ -255,10 +256,10 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
         # abort if character does not have sufficient permissions
         if not sync_manager.character.user.has_perm(
                 'standingssync.add_syncmanager'
-            ):
+        ):
             logger.error(addTag(
                 'Character does not have sufficient permission '
-                + 'to sync the alliance'
+                'to sync the alliance'
             ))
             sync_manager.last_error = SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
             sync_manager.save()
@@ -319,7 +320,6 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
                     page=page
                 ).result()
 
-            
             # determine if contacts have changed by comparing their hashes
             new_version_hash = hashlib.md5(
                 json.dumps(contacts).encode('utf-8')
@@ -357,11 +357,9 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
                 logger.info(addTag('Alliance contacts are unchanged.'))
             
             # dispatch tasks for characters that need syncing
-            alts_need_syncing = SyncedCharacter.objects.filter(
-                    manager=sync_manager
-                ).exclude(
-                version_hash=new_version_hash
-            )
+            alts_need_syncing = SyncedCharacter.objects\
+                .filter(manager=sync_manager)\
+                .exclude(version_hash=new_version_hash)
             for character in alts_need_syncing:
                 run_character_sync.delay(character.pk)
 
@@ -371,13 +369,13 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
         except Exception as ex:
             logger.error(addTag(
                 'An unexpected error ocurred while trying to '
-                + 'sync alliance: {}'. format(ex)
+                'sync alliance: {}'. format(ex)
             ))
             sync_manager.last_error = SyncManager.ERROR_UNKNOWN
             sync_manager.save()
             raise RuntimeError()
 
-    except Exception as ex:
+    except Exception:
         success = False        
     else:
         success = True
@@ -405,7 +403,7 @@ def run_manager_sync(manager_pk, force_sync = False, user_pk = None):
         except Exception as ex:
             logger.error(addTag(
                 'An unexpected error ocurred while trying to '
-                + 'report to user: {}'. format(ex)
+                'report to user: {}'. format(ex)
             ))
     
     return success

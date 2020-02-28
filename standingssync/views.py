@@ -1,18 +1,15 @@
-import datetime
 import logging
 
-from django.shortcuts import render, redirect, HttpResponse
-from django.template import loader
-from django.urls import reverse
-from django.utils.safestring import mark_safe
+from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required, permission_required
 
 from esi.decorators import token_required
+from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 
 from . import tasks, __title__
-from .app_settings import *
-from .models import *
+from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
+from .models import SyncManager, SyncedCharacter, AllianceContact
 from .utils import LoggerAddTag, messages_plus
 
 
@@ -57,7 +54,7 @@ def index(request):
     context = {        
         'app_title': __title__,
         'characters': characters,
-        'has_synced_chars' : has_synced_chars        
+        'has_synced_chars': has_synced_chars        
     }        
 
     if sync_manager is not None:
@@ -83,8 +80,10 @@ def add_alliance_manager(request, token):
     if token_char.alliance_id is None:
         messages_plus.warning(
             request, 
-            'Can not add {}, because it is not a member of any '
-                + 'alliance. '.format(token_char)            
+            (
+                'Can not add {}, because it is not a member '
+                'of any alliance. '.format(token_char)
+            )
         )
         success = False
     
@@ -125,11 +124,12 @@ def add_alliance_manager(request, token):
         )
         messages_plus.success(
             request, 
-            '{} set as alliance character for {}. '.format(
-                    sync_manager.character.character.character_name, 
-                    alliance.alliance_name
-                )
-            + 'Started syncing of alliance contacts. You will receive a report once it is completed.'
+            '{} set as alliance character for {}. '
+            'Started syncing of alliance contacts. '
+            'You will receive a report once it is completed.'.format(
+                sync_manager.character.character.character_name, 
+                alliance.alliance_name
+            )
         )
     return redirect('standingssync:index')
 
@@ -171,7 +171,10 @@ def add_character(request, token):
                 'Could not find character {}'.format(token_char.character_name)    
             )
         else:
-            if sync_manager.get_effective_standing(owned_char.character) < STANDINGSSYNC_CHAR_MIN_STANDING:
+            if (
+                sync_manager.get_effective_standing(owned_char.character) 
+                < STANDINGSSYNC_CHAR_MIN_STANDING
+            ):
                 messages_plus.warning(
                     request,
                     'Can not activate sync for your character {} '.format(
@@ -184,9 +187,7 @@ def add_character(request, token):
             else:
                 sync_character, created = SyncedCharacter.objects.update_or_create(
                     character=owned_char,
-                    defaults={
-                        'manager':sync_manager
-                    }
+                    defaults={'manager': sync_manager}
                 )
                 tasks.run_character_sync.delay(sync_character.pk)
                 messages_plus.success(
@@ -204,7 +205,7 @@ def remove_character(request, alt_pk):
     alt_name = alt.character.character.character_name
     alt.delete()
     messages_plus.success(
-            request, 
-            'Sync deactivated for {}'.format(alt_name)
+        request, 
+        'Sync deactivated for {}'.format(alt_name)
     )    
     return redirect('standingssync:index')

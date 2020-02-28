@@ -1,114 +1,101 @@
-import logging
 import math
-import sys
 from unittest.mock import Mock, patch
 
-from django.contrib.auth.models import User, Permission 
-from django.test import TestCase, RequestFactory
-from django.urls import reverse
+from django.test import TestCase
 
-from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
+from allianceauth.eveonline.models import EveCharacter
 from allianceauth.authentication.models import CharacterOwnership
-from esi.models import Token, Scope
+from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 
-from . import tasks
-from .models import *
-from . import views
+from . import (
+    add_permission_to_user_by_name, create_test_user, LoadTestDataMixin
+)
+from .. import tasks
+from ..models import SyncManager, SyncedCharacter, AllianceContact
+from ..utils import set_test_logger
 
 
-# reconfigure logger so we get logging from tasks to console during test
-c_handler = logging.StreamHandler(sys.stdout)
-logger = logging.getLogger('standingssync.tasks')
-logger.level = logging.DEBUG
-logger.addHandler(c_handler)
+MODULE_PATH = 'standingssync.tasks'
+logger = set_test_logger(MODULE_PATH, __file__)
 
 
-class TestStandingsSyncTasks(TestCase):
+class TestTasks(LoadTestDataMixin, TestCase):
     
     # note: setup is making calls to ESI to get full info for entities
     # all ESI calls in the tested module are mocked though
-
     
     def setUp(self):
 
         # create environment
-        # 1 user with 1 alt character        
-        self.character = EveCharacter.objects.create_character(207150426)  
-        self.alt = EveCharacter.objects.create_character(95328603)
-        self.alliance = EveAllianceInfo.objects.create_alliance(
-            self.character.alliance_id
-        )        
-        self.user = User.objects.create_user(self.character.character_name)        
-        self.main_ownership = CharacterOwnership.objects.create(
-            character=self.character,
-            owner_hash='x1',
-            user=self.user
+        # 1 user with 1 alt character                
+        self.user_1 = create_test_user(self.character_1)
+        self.main_ownership_1 = CharacterOwnership.objects.get(
+            character=self.character_1,
+            user=self.user_1
         )
-        self.alt_ownership =CharacterOwnership.objects.create(
-            character=self.alt,
-            owner_hash='x2',
-            user=self.user
-        )                
+        self.alt_ownership = CharacterOwnership.objects.create(
+            character=self.character_2, owner_hash='x2', user=self.user_1
+        )        
         # 12 ESI contacts
         self.contacts = [
             {
-                'contact_id': 95328603,
+                'contact_id': 1002,
                 'contact_type': 'character',
                 'standing': 10
             },
             {
-                'contact_id': 498125261,
+                'contact_id': 3011,
                 'contact_type': 'alliance',
                 'standing': 5
             },
             {
-                'contact_id': 1018389948,
+                'contact_id': 2011,
                 'contact_type': 'corporation',
                 'standing': 10
             },
             {
-                'contact_id': 93443510,
+                'contact_id': 1012,
                 'contact_type': 'character',
                 'standing': -10
             },
             {
-                'contact_id': 99008458,
+                'contact_id': 3012,
                 'contact_type': 'alliance',
                 'standing': 5
             },
             {
-                'contact_id': 538004967,
+                'contact_id': 2012,
                 'contact_type': 'corporation',
                 'standing': 10
             },
-             {
-                'contact_id': 92330586,
+            {
+                'contact_id': 1013,
                 'contact_type': 'character',
                 'standing': -5
             },
             {
-                'contact_id': 99003581,
+                'contact_id': 3013,
                 'contact_type': 'alliance',
                 'standing': 5
             },
             {
-                'contact_id': 98561441,
+                'contact_id': 2013,
                 'contact_type': 'corporation',
                 'standing': 10
             },
-             {
-                'contact_id': 2112796106,
+            {
+                'contact_id': 1014,
                 'contact_type': 'character',
                 'standing': -10
             },
             {
-                'contact_id': 386292982,
+                'contact_id': 3014,
                 'contact_type': 'alliance',
                 'standing': 5
             },
             {
-                'contact_id': 98479815,
+                'contact_id': 2014,
                 'contact_type': 'corporation',
                 'standing': 10
             },
@@ -122,59 +109,46 @@ class TestStandingsSyncTasks(TestCase):
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             tasks.run_character_sync(99)
 
-
     # verify sync is aborted when user is missing permissions
     def test_run_character_sync_insufficient_permissions(self):        
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership
+            alliance=self.alliance_1, character=self.main_ownership_1
         )
         
         synced_character = SyncedCharacter.objects.create(
-            character=self.alt_ownership,
-            manager=sync_manager
+            character=self.alt_ownership, manager=sync_manager
         )        
         self.assertEqual(
-            synced_character.last_error, 
-            SyncedCharacter.ERROR_NONE
+            synced_character.last_error, SyncedCharacter.ERROR_NONE
         )
         tasks.run_character_sync(synced_character.pk)        
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             SyncedCharacter.objects.get(pk=synced_character.pk)
 
-
     # test invalid token
-    @patch('standingssync.tasks.Token')    
-    def test_run_character_sync_invalid_token(
-            self,             
-            mock_Token
-        ):                
-        
+    @patch(MODULE_PATH + '.Token')    
+    def test_run_character_sync_invalid_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()        
                 
         # create test data
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership,
+            alliance=self.alliance_1,
+            character=self.main_ownership_1,
             version_hash="new"
         )
         for contact in self.contacts:
             AllianceContact.objects.create(
-                manager = sync_manager,
-                contact_id = contact['contact_id'],
-                contact_type = contact['contact_type'],
-                standing = contact['standing'],
+                manager=sync_manager,
+                contact_id=contact['contact_id'],
+                contact_type=contact['contact_type'],
+                standing=contact['standing'],
             )
-        
-        p = Permission.objects.filter(            
-            codename='add_syncedcharacter'
-        ).first()
-        self.user.user_permissions.add(p)
-        self.user.save()
-
+                
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncedcharacter', self.user_1
+        )
         synced_character = SyncedCharacter.objects.create(
-            character=self.alt_ownership,
-            manager=sync_manager
+            character=self.alt_ownership, manager=sync_manager
         )
 
         # run tests        
@@ -182,39 +156,29 @@ class TestStandingsSyncTasks(TestCase):
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             SyncedCharacter.objects.get(pk=synced_character.pk)
 
-
     # test expired token
-    @patch('standingssync.tasks.Token')    
-    def test_run_character_sync_expired_token(
-            self,             
-            mock_Token
-        ):                
-        
+    @patch(MODULE_PATH + '.Token')    
+    def test_run_character_sync_expired_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()        
                 
         # create test data
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership,
+            alliance=self.alliance_1,
+            character=self.main_ownership_1,
             version_hash="new"
         )
         for contact in self.contacts:
             AllianceContact.objects.create(
-                manager = sync_manager,
-                contact_id = contact['contact_id'],
-                contact_type = contact['contact_type'],
-                standing = contact['standing'],
-            )
-        
-        p = Permission.objects.filter(            
-            codename='add_syncedcharacter'
-        ).first()
-        self.user.user_permissions.add(p)
-        self.user.save()
-
+                manager=sync_manager,
+                contact_id=contact['contact_id'],
+                contact_type=contact['contact_type'],
+                standing=contact['standing'],
+            )        
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncedcharacter', self.user_1
+        )
         synced_character = SyncedCharacter.objects.create(
-            character=self.alt_ownership,
-            manager=sync_manager
+            character=self.alt_ownership, manager=sync_manager
         )
 
         # run tests        
@@ -223,40 +187,31 @@ class TestStandingsSyncTasks(TestCase):
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             SyncedCharacter.objects.get(pk=synced_character.pk)
         
-
     # test char no longer blue
-    @patch('standingssync.tasks.Token')    
-    def test_run_character_sync_not_blue(
-            self,             
-            mock_Token
-        ):                
-        
+    @patch(MODULE_PATH + '.Token')    
+    def test_run_character_sync_not_blue(self, mock_Token):        
         mock_Token.objects.filter.return_value = Mock()
                 
         # create test data
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership,
+            alliance=self.alliance_1,
+            character=self.main_ownership_1,
             version_hash="new"
         )        
         for contact in self.contacts:
-            if contact['contact_id'] != int(self.alt.character_id):
+            if contact['contact_id'] != int(self.character_2.character_id):
                 AllianceContact.objects.create(
-                    manager = sync_manager,
-                    contact_id = contact['contact_id'],
-                    contact_type = contact['contact_type'],
-                    standing = contact['standing'],
+                    manager=sync_manager,
+                    contact_id=contact['contact_id'],
+                    contact_type=contact['contact_type'],
+                    standing=contact['standing'],
                 )
-        
-        p = Permission.objects.filter(            
-            codename='add_syncedcharacter'
-        ).first()
-        self.user.user_permissions.add(p)
-        self.user.save()
-
+                
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncedcharacter', self.user_1
+        )
         synced_character = SyncedCharacter.objects.create(
-            character=self.alt_ownership,
-            manager=sync_manager
+            character=self.alt_ownership, manager=sync_manager
         )
 
         # run tests        
@@ -265,15 +220,12 @@ class TestStandingsSyncTasks(TestCase):
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             SyncedCharacter.objects.get(pk=synced_character.pk)
 
-
     # run normal sync for a character
-    @patch('standingssync.tasks.Token')
-    @patch('standingssync.tasks.esi_client_factory')
+    @patch(MODULE_PATH + '.Token')
+    @patch(MODULE_PATH + '.esi_client_factory')
     def test_run_character_sync(
-            self, 
-            mock_esi_client_factory,
-            mock_Token
-        ):        
+        self, mock_esi_client_factory, mock_Token
+    ):        
         # create mocks
         def get_contacts_page(*args, **kwargs):
             """returns single page for operation.result(), first with header"""
@@ -312,32 +264,28 @@ class TestStandingsSyncTasks(TestCase):
                 
         # create test data
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership,
+            alliance=self.alliance_1,
+            character=self.main_ownership_1,
             version_hash="new"
         )
         for contact in self.contacts:
             AllianceContact.objects.create(
-                manager = sync_manager,
-                contact_id = contact['contact_id'],
-                contact_type = contact['contact_type'],
-                standing = contact['standing'],
+                manager=sync_manager,
+                contact_id=contact['contact_id'],
+                contact_type=contact['contact_type'],
+                standing=contact['standing'],
             )
-        
-        p = Permission.objects.filter(            
-            codename='add_syncedcharacter'
-        ).first()
-        self.user.user_permissions.add(p)
-        self.user.save()
 
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncedcharacter', self.user_1
+        )
         synced_character = SyncedCharacter.objects.create(
             character=self.alt_ownership,
             manager=sync_manager
-        )
-
+        )        
         # run tests
-        tasks.run_character_sync(synced_character.pk)
-        
+        self.assertTrue(tasks.run_character_sync(synced_character.pk))
+
         synced_character.refresh_from_db()
         self.assertEqual(
             synced_character.last_error, 
@@ -348,23 +296,17 @@ class TestStandingsSyncTasks(TestCase):
         self.assertEqual(mock_get_operation.result.call_count, 3)
         self.assertEqual(mock_delete_result.result.call_count, 1)
         self.assertEqual(mock_put_result.result.call_count, 4)
-        
-
-    # test run_manager_sync
-
+    
     # run for non existing sync manager
     def test_run_manager_sync_wrong_pk(self):        
         with self.assertRaises(SyncManager.DoesNotExist):
             tasks.run_manager_sync(99)
 
-
     # run without char    
     def test_run_manager_sync_no_char(self):
-        sync_manager = SyncManager.objects.create(
-            alliance=self.alliance
-        )
+        sync_manager = SyncManager.objects.create(alliance=self.alliance_1)
         self.assertFalse(
-            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user.pk)
+            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
         )
         sync_manager.refresh_from_db()
         self.assertEqual(
@@ -372,45 +314,35 @@ class TestStandingsSyncTasks(TestCase):
             SyncManager.ERROR_NO_CHARACTER            
         )
 
-    @patch('standingssync.tasks.Token') 
-    def test_run_manager_sync_error_on_no_token(
-        self,
-        mock_Token
-    ):
+    @patch(MODULE_PATH + '.Token') 
+    def test_run_manager_sync_error_on_no_token(self, mock_Token):
         mock_Token.objects.filter.return_value\
             .require_scopes.return_value\
             .require_valid.return_value\
             .first.return_value = None
-        
-        p = Permission.objects\
-            .filter(codename='add_syncmanager')\
-            .first()
-        self.user.user_permissions.add(p)
-        self.user.save()
+
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncmanager', self.user_1
+        )
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership
+            alliance=self.alliance_1,
+            character=self.main_ownership_1
         )
         self.assertFalse(
-            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user.pk)
+            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
         )
         sync_manager.refresh_from_db()
         self.assertEqual(
-            sync_manager.last_error, 
-            SyncManager.ERROR_TOKEN_INVALID            
+            sync_manager.last_error, SyncManager.ERROR_TOKEN_INVALID            
         )
 
-
     # normal synch of new contacts
-    @patch('standingssync.tasks.Token')
-    @patch('standingssync.tasks.run_character_sync')
-    @patch('standingssync.tasks.esi_client_factory')
+    @patch(MODULE_PATH + '.Token')
+    @patch(MODULE_PATH + '.run_character_sync')
+    @patch(MODULE_PATH + '.esi_client_factory')
     def test_run_manager_sync_normal(
-            self, 
-            mock_esi_client_factory, 
-            mock_run_character_sync,
-            mock_Token
-        ):        
+        self, mock_esi_client_factory, mock_run_character_sync, mock_Token
+    ):        
         # create mocks
         def get_contacts_page(*args, **kwargs):
             """returns single page for operation.result(), first with header"""
@@ -440,15 +372,12 @@ class TestStandingsSyncTasks(TestCase):
             .require_valid.return_value\
             .first.return_value = Mock(spec=Token)
 
-        # create test data
-        p = Permission.objects\
-            .filter(codename='add_syncmanager')\
-            .first()
-        self.user.user_permissions.add(p)
-        self.user.save()
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncmanager', self.user_1
+        )
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership
+            alliance=self.alliance_1,
+            character=self.main_ownership_1
         )
         SyncedCharacter.objects.create(
             character=self.alt_ownership,
@@ -457,20 +386,16 @@ class TestStandingsSyncTasks(TestCase):
 
         # run manager sync
         self.assertTrue(
-            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user.pk)
+            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
         )
-
         sync_manager.refresh_from_db()
-        self.assertEqual(
-            sync_manager.last_error, 
-            SyncManager.ERROR_NONE            
-        )
+        self.assertEqual(sync_manager.last_error, SyncManager.ERROR_NONE)
         
         # should have tried to fetch contacts
         self.assertEqual(mock_operation.result.call_count, 3)
 
         base_contact_ids = {x['contact_id'] for x in self.contacts}
-        base_contact_ids.add(self.character.alliance_id)
+        base_contact_ids.add(self.character_1.alliance_id)
 
         alliance_contact_ids = {
             x.contact_id 
@@ -479,66 +404,44 @@ class TestStandingsSyncTasks(TestCase):
         
         self.assertSetEqual(base_contact_ids, alliance_contact_ids)
 
-    
     # normal synch of new contacts
-    @patch('standingssync.tasks.run_manager_sync')    
-    def test_run_sync_all(
-            self,             
-            mock_run_manager_sync
-        ):
+    @patch(MODULE_PATH + '.run_manager_sync')    
+    def test_run_sync_all(self, mock_run_manager_sync):
         # create mocks        
         mock_run_manager_sync.delay = Mock()
 
         # create 1st sync manager
-        s1 = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership
+        SyncManager.objects.create(
+            alliance=self.alliance_1, character=self.main_ownership_1
         )
-
         # create 2nd sync manager
-        character2 = EveCharacter.objects.create_character(2112839520)
-        alliance2 = EveAllianceInfo.objects.create_alliance(
-            character2.alliance_id
-        )                
-        main_ownership2 = CharacterOwnership.objects.create(
-            character=character2,
-            owner_hash='x3',
-            user=User.objects.create_user(character2.character_name)
+        self.user_3 = create_test_user(self.character_3)        
+        main_ownership2 = CharacterOwnership.objects.get(
+            character=self.character_3,            
+            user=self.user_3
         )
-        s2 = SyncManager.objects.create(
-            alliance=alliance2,
-            character=main_ownership2
-        )
-        
+        SyncManager.objects.create(
+            alliance=self.alliance_3, character=main_ownership2
+        )     
         # run regular sync
         tasks.run_regular_sync()
 
         # should have tried to dispatch run_manager_sync 2 times
         self.assertEqual(mock_run_manager_sync.delay.call_count, 2)
 
-
     # test expired token
-    @patch('standingssync.tasks.Token')    
-    def test_run_manager_sync_expired_token(
-            self,             
-            mock_Token
-        ):                
+    @patch(MODULE_PATH + '.Token')    
+    def test_run_manager_sync_expired_token(self, mock_Token):                
         
-        mock_Token.objects.filter.side_effect = TokenExpiredError()        
-                        
-        # create test data
-        p = Permission.objects.filter(            
-            codename='add_syncmanager'
-        ).first()
-        self.user.user_permissions.add(p)
-        self.user.save()
+        mock_Token.objects.filter.side_effect = TokenExpiredError()
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncmanager', self.user_1
+        )
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership
+            alliance=self.alliance_1, character=self.main_ownership_1
         )
         SyncedCharacter.objects.create(
-            character=self.alt_ownership,
-            manager=sync_manager
+            character=self.alt_ownership, manager=sync_manager
         )
 
         # run manager sync
@@ -550,25 +453,16 @@ class TestStandingsSyncTasks(TestCase):
             SyncManager.ERROR_TOKEN_EXPIRED            
         )
 
-
     # test invalid token
-    @patch('standingssync.tasks.Token')    
-    def test_run_manager_sync_invalid_token(
-            self,             
-            mock_Token
-        ):                
-        
-        mock_Token.objects.filter.side_effect = TokenInvalidError()        
-                        
-        # create test data
-        p = Permission.objects.filter(            
-            codename='add_syncmanager'
-        ).first()
-        self.user.user_permissions.add(p)
-        self.user.save()
+    @patch(MODULE_PATH + '.Token')    
+    def test_run_manager_sync_invalid_token(self, mock_Token):
+        mock_Token.objects.filter.side_effect = TokenInvalidError()
+        add_permission_to_user_by_name(
+            'standingssync', 'add_syncmanager', self.user_1
+        )
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership
+            alliance=self.alliance_1,
+            character=self.main_ownership_1
         )
         SyncedCharacter.objects.create(
             character=self.alt_ownership,
@@ -584,13 +478,11 @@ class TestStandingsSyncTasks(TestCase):
             SyncManager.ERROR_TOKEN_INVALID            
         )
 
-
     def test_get_effective_standing(self):
-        
         # create test data
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance,
-            character=self.main_ownership
+            alliance=self.alliance_1,
+            character=self.main_ownership_1
         )
         contacts = [
             {
@@ -612,18 +504,18 @@ class TestStandingsSyncTasks(TestCase):
         for contact in contacts:
             AllianceContact.objects.create(
                 manager=sync_manager,
-                contact_id = contact['contact_id'],
-                contact_type = contact['contact_type'],
-                standing = contact['standing'],
+                contact_id=contact['contact_id'],
+                contact_type=contact['contact_type'],
+                standing=contact['standing'],
             )
         
         # test
         c1 = EveCharacter(
-            character_id = 101,
-            character_name = "Char 1",
-            corporation_id = 201,
-            corporation_name = "Corporation 1",
-            corporation_ticker = "C1"
+            character_id=101,
+            character_name="Char 1",
+            corporation_id=201,
+            corporation_name="Corporation 1",
+            corporation_ticker="C1"
         )
 
         self.assertEqual(
@@ -632,11 +524,11 @@ class TestStandingsSyncTasks(TestCase):
         )
 
         c2 = EveCharacter(
-            character_id = 102,
-            character_name = "Char 2",
-            corporation_id = 201,
-            corporation_name = "Corporation 1",
-            corporation_ticker = "C1"
+            character_id=102,
+            character_name="Char 2",
+            corporation_id=201,
+            corporation_name="Corporation 1",
+            corporation_ticker="C1"
         )
 
         self.assertEqual(
@@ -644,14 +536,14 @@ class TestStandingsSyncTasks(TestCase):
             10
         )
         c3 = EveCharacter(
-            character_id = 103,
-            character_name = "Char 3",
-            corporation_id = 203,
-            corporation_name = "Corporation 3",
-            corporation_ticker = "C2",
-            alliance_id = 301,
-            alliance_name = "Alliance 1",
-            alliance_ticker = "A1"
+            character_id=103,
+            character_name="Char 3",
+            corporation_id=203,
+            corporation_name="Corporation 3",
+            corporation_ticker="C2",
+            alliance_id=301,
+            alliance_name="Alliance 1",
+            alliance_ticker="A1"
         )
 
         self.assertEqual(
@@ -660,63 +552,17 @@ class TestStandingsSyncTasks(TestCase):
         )
 
         c4 = EveCharacter(
-            character_id = 103,
-            character_name = "Char 3",
-            corporation_id = 203,
-            corporation_name = "Corporation 3",
-            corporation_ticker = "C2",
-            alliance_id = 302,
-            alliance_name = "Alliance 2",
-            alliance_ticker = "A2"
+            character_id=103,
+            character_name="Char 3",
+            corporation_id=203,
+            corporation_name="Corporation 3",
+            corporation_ticker="C2",
+            alliance_id=302,
+            alliance_name="Alliance 2",
+            alliance_ticker="A2"
         )
 
         self.assertEqual(
             sync_manager.get_effective_standing(c4),
             0
         )
-
-class TestViews(TestCase):
-    
-    def setUp(self):
-        self.factory = RequestFactory()        
-        
-        self.character = EveCharacter.objects.create(
-            character_id=42,
-            character_name='John Doe',
-            corporation_id=142,
-            corporation_name='John Doe & Co.',
-            corporation_ticker='ABC'
-        )        
-        self.user = User.objects.create_user(
-            self.character.character_name,
-            'abc@example.com',
-            'password'
-        )
-        self.main_ownership = CharacterOwnership.objects.create(
-            character=self.character,
-            owner_hash='x1',
-            user=self.user
-        )     
-
-
-    def test_index_access(self):        
-        request = self.factory.get(reverse('standingssync:index'))
-        request.user = self.user
-        
-        response = views.index(request)
-        self.assertEqual(response.status_code, 302)
-
-
-    def test_index_normal(self):
-        p = Permission.objects.get(
-            codename='add_syncedcharacter', 
-            content_type__app_label=__package__
-        )
-        self.user.user_permissions.add(p)
-        self.user.save()
-        
-        request = self.factory.get(reverse('standingssync:index'))
-        request.user = self.user
-        
-        response = views.index(request)
-        self.assertEqual(response.status_code, 200)
