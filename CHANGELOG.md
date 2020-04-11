@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-### Added
+## [1.0.3] - 2020-04-11
 
 ### Changed
 
@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Corrected required permission for adding sync managers
 - Minor bugfixes
+- Improved test coverage
 
 ## [1.0.2] - 2020-02-28
 

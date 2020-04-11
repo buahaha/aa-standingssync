@@ -2,10 +2,12 @@
 
 This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth), which enables non-alliance characters like scout alts to have the same standings view in game as their alliance main.
 
+![release](https://img.shields.io/pypi/v/aa-standingssync?label=release) ![python](https://img.shields.io/pypi/pyversions/aa-standingssync) ![django](https://img.shields.io/pypi/djversions/aa-standingssync?label=django) ![pipeline](https://gitlab.com/ErikKalkoken/aa-standingssync/badges/master/pipeline.svg) ![coverage](https://gitlab.com/ErikKalkoken/aa-standingssync/badges/master/coverage.svg) ![license](https://img.shields.io/badge/license-MIT-green)
+
 ## Content
 
 - [Features](#features)
-- [Screenshot](#creenshot)
+- [Screenshot](#screenshot)
 - [How it works](#how-it-works)
 - [Installation](#installation)
 - [Updating](#updating)
@@ -40,10 +42,10 @@ To enable non-alliance members to use alliance standings the personal contact of
 
 ### 1. Install app
 
-Install into AA virtual environment with PIP install from this repo:
+Install into AA virtual environment with PIP install ffrom PyPI:
 
 ```bash
-pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync.git
+pip install aa-standingssync
 ```
 
 ### 2 Update Eve Online app
@@ -103,7 +105,7 @@ To update your existing installation of Alliance Freight first enable your virtu
 Then run the following commands from your AA project directory (the one that contains `manage.py`).
 
 ```bash
-pip install git+https://gitlab.com/ErikKalkoken/aa-standingssync.git -U
+pip install -U aa-standingssync
 ```
 
 ```bash

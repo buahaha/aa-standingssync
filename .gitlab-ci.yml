@@ -1,5 +1,6 @@
 stages:
-- "test"
+- test
+- deploy
 
 before_script:
 - apt-get update
@@ -7,11 +8,6 @@ before_script:
 - redis-server --daemonize yes
 - python -V
 - pip install tox
-    
-test-3.5:
-  image: python:3.5-buster
-  script:  
-  - tox -e py35
 
 test-3.6:
   image: python:3.6-buster
@@ -28,3 +24,21 @@ test-3.8:
   script:  
   - tox -e py38
 
+test-flake8:
+  image: python:3.8-buster
+  script:  
+  - tox -e flake8
+
+deploy-pypi:
+  stage: deploy
+  image: python:3.7-buster
+
+  before_script:
+    - pip install twine
+
+  script:
+    - python setup.py sdist
+    - twine upload dist/*
+
+  only:
+    - tags

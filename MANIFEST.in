@@ -4,4 +4,8 @@ include standingssync/swagger.json
 recursive-include standingssync *.py
 recursive-include standingssync/static *
 recursive-include standingssync/templates *
+recursive-include standingssync/templatetags *.py
+recursive-exclude standingssync/templatetags *.pyc
+recursive-exclude testauth *.*
+recursive-exclude standingssync/tests *.*
 
