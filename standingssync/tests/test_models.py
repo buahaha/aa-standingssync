@@ -14,19 +14,19 @@ logger = set_test_logger(MODULE_PATH, __file__)
 
 class TestSyncManager(LoadTestDataMixin, TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
         
         # 1 user with 1 alt character
-        self.user_1 = create_test_user(self.character_1)
-        self.main_ownership_1 = CharacterOwnership.objects.get(
-            character=self.character_1, user=self.user_1
+        cls.user_1 = create_test_user(cls.character_1)
+        cls.main_ownership_1 = CharacterOwnership.objects.get(
+            character=cls.character_1, user=cls.user_1
         )
 
-    def test_get_effective_standing(self):
-        # create test data
-        sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1,
-            character=self.main_ownership_1
+        cls.sync_manager = SyncManager.objects.create(
+            alliance=cls.alliance_1,
+            character=cls.main_ownership_1
         )
         contacts = [
             {
@@ -47,12 +47,13 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
         ]
         for contact in contacts:
             AllianceContact.objects.create(
-                manager=sync_manager,
+                manager=cls.sync_manager,
                 contact_id=contact['contact_id'],
                 contact_type=contact['contact_type'],
                 standing=contact['standing'],
             )
-        
+
+    def test_get_effective_standing(self):        
         # test
         c1 = EveCharacter(
             character_id=101,
@@ -61,10 +62,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
             corporation_name="Corporation 1",
             corporation_ticker="C1"
         )
-        self.assertEqual(
-            sync_manager.get_effective_standing(c1),
-            -10
-        )
+        self.assertEqual(self.sync_manager.get_effective_standing(c1), -10)
 
         c2 = EveCharacter(
             character_id=102,
@@ -73,10 +71,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
             corporation_name="Corporation 1",
             corporation_ticker="C1"
         )
-        self.assertEqual(
-            sync_manager.get_effective_standing(c2),
-            10
-        )
+        self.assertEqual(self.sync_manager.get_effective_standing(c2), 10)
 
         c3 = EveCharacter(
             character_id=103,
@@ -88,10 +83,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
             alliance_name="Alliance 1",
             alliance_ticker="A1"
         )
-        self.assertEqual(
-            sync_manager.get_effective_standing(c3),
-            5
-        )
+        self.assertEqual(self.sync_manager.get_effective_standing(c3), 5)
 
         c4 = EveCharacter(
             character_id=103,
@@ -103,35 +95,46 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
             alliance_name="Alliance 2",
             alliance_ticker="A2"
         )
+        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0)
+
+    def test_set_sync_status(self):
+        self.sync_manager.last_error = SyncManager.ERROR_NONE
+        self.sync_manager.last_sync = None
+
+        self.sync_manager.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+        self.sync_manager.refresh_from_db()
+
         self.assertEqual(
-            sync_manager.get_effective_standing(c4),
-            0
+            self.sync_manager.last_error, SyncManager.ERROR_TOKEN_INVALID
         )
+        self.assertIsNotNone(self.sync_manager.last_sync)
 
 
 class TestSyncCharacter(LoadTestDataMixin, TestCase):
     
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
         
         # 1 user with 1 alt character
-        self.user_1 = create_test_user(self.character_1)
-        self.main_ownership_1 = CharacterOwnership.objects.get(
-            character=self.character_1, user=self.user_1
+        cls.user_1 = create_test_user(cls.character_1)
+        cls.main_ownership_1 = CharacterOwnership.objects.get(
+            character=cls.character_1, user=cls.user_1
         )
-        self.alt_ownership = CharacterOwnership.objects.create(
-            character=self.character_2, owner_hash='x2', user=self.user_1
+        cls.alt_ownership = CharacterOwnership.objects.create(
+            character=cls.character_2, owner_hash='x2', user=cls.user_1
         )
         
         # sync manager with contacts
-        self.sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1,
-            character=self.main_ownership_1,
+        cls.sync_manager = SyncManager.objects.create(
+            alliance=cls.alliance_1,
+            character=cls.main_ownership_1,
             version_hash="new"
         )        
                 
         # sync char
-        self.synced_character = SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=self.sync_manager
+        cls.synced_character = SyncedCharacter.objects.create(
+            character=cls.alt_ownership, manager=cls.sync_manager
         )
 
     def test_get_last_error_message_after_sync(self):
@@ -153,3 +156,15 @@ class TestSyncCharacter(LoadTestDataMixin, TestCase):
         self.synced_character.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
         expected = 'Expired token'
         self.assertEqual(self.synced_character.get_status_message(), expected)
+
+    def test_set_sync_status(self):
+        self.synced_character.last_error = SyncManager.ERROR_NONE
+        self.synced_character.last_sync = None
+
+        self.synced_character.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+        self.synced_character.refresh_from_db()
+
+        self.assertEqual(
+            self.synced_character.last_error, SyncManager.ERROR_TOKEN_INVALID
+        )
+        self.assertIsNotNone(self.synced_character.last_sync)

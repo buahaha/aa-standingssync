@@ -1,6 +1,6 @@
 """Utility functions and classes for tests"""
 
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import User
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import (
@@ -14,6 +14,16 @@ ESI_CONTACTS = [
         'contact_id': 1002,
         'contact_type': 'character',
         'standing': 10.0
+    },
+    {
+        'contact_id': 1004,
+        'contact_type': 'character',
+        'standing': 10.0
+    },
+    {
+        'contact_id': 1005,
+        'contact_type': 'character',
+        'standing': -10.0
     },
     {
         'contact_id': 1012,
@@ -95,21 +105,6 @@ ESI_CONTACTS = [
 ESI_CONTACTS_BY_ID = {int(x['contact_id']): x for x in ESI_CONTACTS}
 
 
-def add_permission_to_user_by_name(
-    app_label, codename, user, disconnect_signals=True
-):
-    if disconnect_signals:
-        AuthUtils.disconnect_signals()
-    
-    p = Permission.objects\
-        .get(codename=codename, content_type__app_label=app_label)
-    user.user_permissions.add(p)
-    user = User.objects.get(pk=user.pk)
-
-    if disconnect_signals:
-        AuthUtils.connect_signals()
-
-
 def add_main_to_user(user: User, character: EveCharacter):
     CharacterOwnership.objects.create(
         user=user,
@@ -122,8 +117,7 @@ def add_main_to_user(user: User, character: EveCharacter):
 
 def create_test_user(character: EveCharacter) -> User:
     user = AuthUtils.create_user(character.character_name)
-    add_main_to_user(user, character)
-    add_permission_to_user_by_name('auth', 'timer_view', user)
+    add_main_to_user(user, character)    
     return user
 
 
@@ -153,9 +147,9 @@ class LoadTestDataMixin():
         cls.character_2 = EveCharacter.objects.create(
             character_id=1002,
             character_name='Clark Kent',
-            corporation_id=2002,
+            corporation_id=2001,
             corporation_name='Wayne Technologies',
-            alliance_id=3002,
+            alliance_id=3001,
             alliance_name='Wayne Enterprises'
         )        
         cls.character_3 = EveCharacter.objects.create(
@@ -167,12 +161,34 @@ class LoadTestDataMixin():
             alliance_name='Lex Holding'
         )
         cls.corporation_3 = EveCorporationInfo.objects.create(
-            corporation_id=cls.character_3.alliance_id,
-            corporation_name=cls.character_3.alliance_name,
+            corporation_id=cls.character_3.corporation_id,
+            corporation_name=cls.character_3.corporation_name,
             member_count=666
         )
         cls.alliance_3 = EveAllianceInfo.objects.create(
             alliance_id=cls.character_3.alliance_id,
             alliance_name=cls.character_3.alliance_name,
             executor_corp_id=cls.corporation_3.corporation_id
+        )
+        cls.character_4 = EveCharacter.objects.create(
+            character_id=1004,
+            character_name='Kara Danvers',
+            corporation_id=2004,
+            corporation_name='CatCo'
+        )
+        cls.corporation_4 = EveCorporationInfo.objects.create(
+            corporation_id=cls.character_4.corporation_id,
+            corporation_name=cls.character_4.corporation_name,
+            member_count=1234
+        )
+        cls.character_5 = EveCharacter.objects.create(
+            character_id=1005,
+            character_name='Peter Parker',
+            corporation_id=2005,
+            corporation_name='Daily Bugle'
+        )
+        cls.corporation_5 = EveCorporationInfo.objects.create(
+            corporation_id=cls.character_5.corporation_id,
+            corporation_name=cls.character_5.corporation_name,
+            member_count=1234
         )

@@ -1,4 +1,3 @@
-import datetime
 import hashlib
 import json
 import logging
@@ -52,9 +51,7 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
         synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
     except SyncedCharacter.DoesNotExist:
         raise SyncedCharacter.DoesNotExist(
-            "Requested character with pk {} does not exist".format(
-                sync_char_pk
-            )
+            "Requested character with pk {} does not exist".format(sync_char_pk)
         )
     addTag = make_logger_prefix(synced_character)
     
@@ -140,9 +137,8 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             synced_character.delete()
             return False
         
-        if token is None:
-            synced_character.last_error = SyncedCharacter.ERROR_UNKNOWN
-            synced_character.save()
+        if token is None:            
+            synced_character.set_sync_status(SyncedCharacter.ERROR_UNKNOWN)
             raise RuntimeError('Can not find suitable token for synced char')
         
         try:
@@ -151,9 +147,8 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             )
             
         except Exception as ex:
-            logger.error('An unexpected error ocurred: {}'.format(ex))
-            synced_character.last_error = SyncedCharacter.ERROR_UNKNOWN
-            synced_character.save()
+            logger.error('An unexpected error ocurred: {}'.format(ex))            
+            synced_character.set_sync_status(SyncedCharacter.ERROR_UNKNOWN)
             raise
 
     return True
@@ -208,11 +203,8 @@ def _perform_contacts_sync_for_character(synced_character, token, addTag):
 
     # store updated version hash with character
     synced_character.version_hash = synced_character.manager.version_hash
-    synced_character.last_sync = datetime.datetime.now(
-        datetime.timezone.utc
-    )
-    synced_character.last_error = SyncedCharacter.ERROR_NONE
     synced_character.save()
+    synced_character.set_sync_status(SyncedCharacter.ERROR_NONE)
 
 
 @shared_task
@@ -233,33 +225,29 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
     except SyncManager.DoesNotExist:        
         raise SyncManager.DoesNotExist(
             'task called for non existing manager with pk {}'.format(manager_pk)
-        )
-        return False
+        )        
     
     try:
         addTag = make_logger_prefix(sync_manager)
         
-        sync_manager.last_sync = datetime.datetime.now(datetime.timezone.utc)
-        sync_manager.save()
-
         if sync_manager.character is None:
             logger.error(addTag(
                 'No character configured to sync the alliance'
             ))
-            sync_manager.last_error = SyncManager.ERROR_NO_CHARACTER
-            sync_manager.save()
+            sync_manager.set_sync_status(SyncManager.ERROR_NO_CHARACTER)
             raise ValueError()
         
         # abort if character does not have sufficient permissions
         if not sync_manager.character.user.has_perm(
-                'standingssync.add_syncmanager'
+            'standingssync.add_syncmanager'
         ):
             logger.error(addTag(
                 'Character does not have sufficient permission '
                 'to sync the alliance'
             ))
-            sync_manager.last_error = SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
-            sync_manager.save()
+            sync_manager.set_sync_status(
+                SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
+            )
             raise ValueError()
 
         try:            
@@ -276,19 +264,16 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
             logger.error(addTag(
                 'Invalid token for fetching alliance contacts'
             ))
-            sync_manager.last_error = SyncManager.ERROR_TOKEN_INVALID
-            sync_manager.save()
+            sync_manager.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
             raise TokenInvalidError()
             
         except TokenExpiredError:
-            sync_manager.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
-            sync_manager.save()
+            sync_manager.set_sync_status(SyncManager.ERROR_TOKEN_EXPIRED)
             raise TokenExpiredError()
 
         else:
             if not token:
-                sync_manager.last_error = SyncManager.ERROR_TOKEN_INVALID
-                sync_manager.save()
+                sync_manager.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
                 raise TokenInvalidError()
         
         try:
@@ -301,8 +286,7 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
                 'An unexpected error ocurred while trying to '
                 'sync alliance: {}'. format(ex)
             ))
-            sync_manager.last_error = SyncManager.ERROR_UNKNOWN
-            sync_manager.save()
+            sync_manager.set_sync_status(SyncManager.ERROR_UNKNOWN)
             raise RuntimeError()
 
     except Exception:
@@ -409,9 +393,8 @@ def _perform_contacts_sync_for_manager(
     for character in alts_need_syncing:
         run_character_sync.delay(character.pk)
 
-    sync_manager.last_error = SyncManager.ERROR_NONE
-    sync_manager.save()
-
+    sync_manager.set_sync_status(SyncManager.ERROR_NONE)
+    
 
 @shared_task
 def run_regular_sync():

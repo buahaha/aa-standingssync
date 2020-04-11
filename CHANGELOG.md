@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- Sync status now updated at the end of the process, not at the beginning
+
 ### Fixed
+
+- Corrected required permission for adding sync managers
+- Minor bugfixes
 
 ## [1.0.2] - 2020-02-28
 

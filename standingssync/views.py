@@ -67,14 +67,14 @@ def index(request):
 
 
 @login_required
-@permission_required('standingssync.add_alliancemanager')
+@permission_required('standingssync.add_syncmanager')
 @token_required(SyncManager.get_esi_scopes())
 def add_alliance_manager(request, token):
     """add or update sync manager for an alliance"""
     success = True
     token_char = EveCharacter.objects.get(character_id=token.character_id)
 
-    if token_char.alliance_id is None:
+    if not token_char.alliance_id:
         messages_plus.warning(
             request, 
             (
@@ -92,8 +92,9 @@ def add_alliance_manager(request, token):
             )            
         except CharacterOwnership.DoesNotExist:
             messages_plus.warning(
-                request,
-                'Could not find character {}'.format(token_char.character_name)    
+                request, 'Could not find character {}'.format(
+                    token_char.character_name
+                )    
             )
             success = False
     
@@ -109,7 +110,7 @@ def add_alliance_manager(request, token):
             alliance.save()
 
     if success:
-        sync_manager, created = SyncManager.objects.update_or_create(    
+        sync_manager, _ = SyncManager.objects.update_or_create(    
             alliance=alliance,
             defaults={
                 'character': owned_char
@@ -144,7 +145,7 @@ def add_character(request, token):
     
     try:
         sync_manager = SyncManager.objects.get(alliance=alliance)
-    except EveAllianceInfo.DoesNotExist:
+    except SyncManager.DoesNotExist:
         raise RuntimeError("can not find sync manager for alliance")
         
     token_char = EveCharacter.objects.get(character_id=token.character_id)
@@ -158,8 +159,7 @@ def add_character(request, token):
     else:
         try:
             owned_char = CharacterOwnership.objects.get(
-                user=request.user,
-                character=token_char
+                user=request.user, character=token_char
             )
         except CharacterOwnership.DoesNotExist:
             messages_plus.warning(
@@ -181,7 +181,7 @@ def add_character(request, token):
                     )
                 )
             else:
-                sync_character, created = SyncedCharacter.objects.update_or_create(
+                sync_character, _ = SyncedCharacter.objects.update_or_create(
                     character=owned_char,
                     defaults={'manager': sync_manager}
                 )

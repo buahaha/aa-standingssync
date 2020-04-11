@@ -1,57 +1,56 @@
 import math
 from unittest.mock import Mock, patch
 
-from django.test import TestCase
-
 from allianceauth.authentication.models import CharacterOwnership
+from allianceauth.tests.auth_utils import AuthUtils
+
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 
-from . import (
-    add_permission_to_user_by_name, 
-    create_test_user, 
-    LoadTestDataMixin, 
-    ESI_CONTACTS
+from . import (    
+    create_test_user, LoadTestDataMixin, ESI_CONTACTS
 )
 from .. import tasks
 from ..models import SyncManager, SyncedCharacter, AllianceContact
-from ..utils import set_test_logger
+from ..utils import set_test_logger, NoSocketsTestCase
 
 
 MODULE_PATH = 'standingssync.tasks'
 logger = set_test_logger(MODULE_PATH, __file__)
 
 
-class TestCharacterSync(LoadTestDataMixin, TestCase):
+class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
     
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
         
         # 1 user with 1 alt character
-        self.user_1 = create_test_user(self.character_1)
-        self.main_ownership_1 = CharacterOwnership.objects.get(
-            character=self.character_1, user=self.user_1
+        cls.user_1 = create_test_user(cls.character_1)
+        cls.main_ownership_1 = CharacterOwnership.objects.get(
+            character=cls.character_1, user=cls.user_1
         )
-        self.alt_ownership = CharacterOwnership.objects.create(
-            character=self.character_2, owner_hash='x2', user=self.user_1
+        cls.alt_ownership = CharacterOwnership.objects.create(
+            character=cls.character_2, owner_hash='x2', user=cls.user_1
         )
         
         # sync manager with contacts
-        self.sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1,
-            character=self.main_ownership_1,
+        cls.sync_manager = SyncManager.objects.create(
+            alliance=cls.alliance_1,
+            character=cls.main_ownership_1,
             version_hash="new"
         )        
         for contact in ESI_CONTACTS:
             AllianceContact.objects.create(
-                manager=self.sync_manager,
+                manager=cls.sync_manager,
                 contact_id=contact['contact_id'],
                 contact_type=contact['contact_type'],
                 standing=contact['standing'],
             )
         
         # sync char
-        self.synced_character = SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=self.sync_manager
+        cls.synced_character = SyncedCharacter.objects.create(
+            character=cls.alt_ownership, manager=cls.sync_manager
         )
 
     # calling for an non existing sync character should raise an exception
@@ -71,8 +70,8 @@ class TestCharacterSync(LoadTestDataMixin, TestCase):
     @patch(MODULE_PATH + '.Token')    
     def test_delete_sync_character_if_token_invalid(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()        
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncedcharacter', self.user_1
+        AuthUtils.add_permission_to_user_by_name(
+            'standingssync.add_syncedcharacter', self.user_1
         )        
         self.assertFalse(
             tasks.run_character_sync(self.synced_character.pk)
@@ -84,8 +83,8 @@ class TestCharacterSync(LoadTestDataMixin, TestCase):
     @patch(MODULE_PATH + '.Token')    
     def test_delete_sync_character_if_token_expired(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncedcharacter', self.user_1
+        AuthUtils.add_permission_to_user_by_name(
+            'standingssync.add_syncedcharacter', self.user_1
         )        
         self.assertFalse(
             tasks.run_character_sync(self.synced_character.pk)
@@ -96,27 +95,28 @@ class TestCharacterSync(LoadTestDataMixin, TestCase):
         
     @patch(MODULE_PATH + '.Token')    
     def test_delete_sync_character_if_no_longer_blue(self, mock_Token):
-        mock_Token.objects.filter.return_value = Mock()
-                
-        # delete sync character from contacts so he is no longer blue
-        AllianceContact.objects\
-            .get(
-                manager=self.sync_manager,
-                contact_id=int(self.character_2.character_id)
-            ).delete()
-        
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncedcharacter', self.user_1
+        mock_Token.objects.filter.return_value = Mock()                
+        AuthUtils.add_permission_to_user_by_name(
+            'standingssync.add_syncedcharacter', self.user_1
         )
+        # set standing for sync contact to non blue
+        contact = AllianceContact.objects.get(
+            manager=self.sync_manager,
+            contact_id=int(self.character_2.character_id)
+        )
+        contact.standing = -10
+        contact.save()
         
         # run tests
-        self.assertFalse(
-            tasks.run_character_sync(self.synced_character.pk)
-        )
+        self.assertFalse(tasks.run_character_sync(self.synced_character.pk))
+        
         self.assertFalse(
             SyncedCharacter.objects.filter(pk=self.synced_character.pk).exists()
         )
-
+        # reset standing
+        contact.standing = 10
+        contact.save()
+        
     # run normal sync for a character
     @patch(MODULE_PATH + '.Token')
     @patch(MODULE_PATH + '.esi_client_factory')
@@ -169,8 +169,8 @@ class TestCharacterSync(LoadTestDataMixin, TestCase):
         mock_esi_client_factory.return_value = mock_client   
         mock_Token.objects.filter = Mock()
         
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncedcharacter', self.user_1
+        AuthUtils.add_permission_to_user_by_name(
+            'standingssync.add_syncedcharacter', self.user_1
         )
         
         # run tests
@@ -190,27 +190,37 @@ class TestCharacterSync(LoadTestDataMixin, TestCase):
         )
     
 
-class TestManagerSync(LoadTestDataMixin, TestCase):
+class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
 
         # create environment
-        # 1 user with 1 alt character                
-        self.user_1 = create_test_user(self.character_1)
-        self.main_ownership_1 = CharacterOwnership.objects.get(
-            character=self.character_1, user=self.user_1
+        # 1 user has permission for manager sync          
+        cls.user_1 = create_test_user(cls.character_1)
+        cls.main_ownership_1 = CharacterOwnership.objects.get(
+            character=cls.character_1, user=cls.user_1
+        )        
+        AuthUtils.add_permission_to_user_by_name(
+            'standingssync.add_syncmanager', cls.user_1
         )
-        self.alt_ownership = CharacterOwnership.objects.create(
-            character=self.character_2, owner_hash='x2', user=self.user_1
-        )                
+
+        # user 1 has no permission for manager sync and has 1 alt
+        cls.user_2 = create_test_user(cls.character_2)
+        cls.main_ownership_2 = CharacterOwnership.objects.get(
+            character=cls.character_2, user=cls.user_2
+        )
+        cls.alt_ownership = CharacterOwnership.objects.create(
+            character=cls.character_4, owner_hash='x4', user=cls.user_2
+        )  
 
     # run for non existing sync manager
     def test_run_sync_wrong_pk(self):        
         with self.assertRaises(SyncManager.DoesNotExist):
-            tasks.run_manager_sync(99)
-
-    # run without char    
-    def test_run_sync_no_char(self):
+            tasks.run_manager_sync(99999)
+    
+    def test_abort_when_no_char(self):
         sync_manager = SyncManager.objects.create(alliance=self.alliance_1)
         self.assertFalse(
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
@@ -221,16 +231,26 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
             SyncManager.ERROR_NO_CHARACTER            
         )
 
+    # run without char    
+    def test_abort_when_insufficient_permission(self):
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance_1, character=self.main_ownership_2
+        )
+        self.assertFalse(
+            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_2.pk)
+        )
+        sync_manager.refresh_from_db()
+        self.assertEqual(
+            sync_manager.last_error, SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
+        )
+
     @patch(MODULE_PATH + '.Token') 
     def test_run_sync_error_on_no_token(self, mock_Token):
         mock_Token.objects.filter.return_value\
             .require_scopes.return_value\
             .require_valid.return_value\
             .first.return_value = None
-
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncmanager', self.user_1
-        )
+        
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1,
             character=self.main_ownership_1
@@ -279,9 +299,6 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
             .require_valid.return_value\
             .first.return_value = Mock(spec=Token)
 
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncmanager', self.user_1
-        )
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1,
             character=self.main_ownership_1
@@ -338,12 +355,8 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
 
     # test expired token
     @patch(MODULE_PATH + '.Token')    
-    def test_run_sync_expired_token(self, mock_Token):                
-        
+    def test_run_sync_expired_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncmanager', self.user_1
-        )
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1, character=self.main_ownership_1
         )
@@ -364,9 +377,6 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
     @patch(MODULE_PATH + '.Token')    
     def test_run_sync_invalid_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()
-        add_permission_to_user_by_name(
-            'standingssync', 'add_syncmanager', self.user_1
-        )
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1,
             character=self.main_ownership_1

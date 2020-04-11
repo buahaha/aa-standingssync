@@ -131,7 +131,7 @@ This app only uses two permission. One for enabling this app for users and one f
 Name | Purpose | Code
 -- | -- | --
 Can add synced character |Enabling the app for a user. This permission should be enabled for everyone who is allowed to use the app (e.g. Member state) |  `add_syncedcharacter`
-Can add alliance manager |Enables adding alliances for syncing by setting the character for fetching alliance contacts. This should be limited to users with admins / leadership privileges. |  `add_alliancemanager`
+Can add alliance manager |Enables adding alliances for syncing by setting the character for fetching alliance contacts. This should be limited to users with admins / leadership privileges. |  `add_syncmanager`
 
 ## Admin functions
 

@@ -1,6 +1,8 @@
 import logging
 
 from django.db import models
+from django.utils.timezone import now
+
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
 
@@ -56,6 +58,12 @@ class SyncManager(models.Model):
             self.alliance.alliance_name, 
             character_name
         )
+
+    def set_sync_status(self, status):
+        """sets the sync status with the current date and time"""
+        self.last_error = status
+        self.last_sync = now()
+        self.save()
 
     def get_effective_standing(self, character: EveCharacter):
         """ return the effective standing with this alliance"""
@@ -118,6 +126,12 @@ class SyncedCharacter(models.Model):
     
     def __str__(self):
         return self.character.character.character_name
+
+    def set_sync_status(self, status):
+        """sets the sync status with the current date and time"""
+        self.last_error = status
+        self.last_sync = now()
+        self.save()
 
     def get_status_message(self):
         if self.last_error != self.ERROR_NONE:
