@@ -13,4 +13,4 @@ coverage.xml
 .tox/
 announce_release.py
 htmlcov/
-.pylintrc
+todos.md
