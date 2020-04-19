@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+from django.contrib.auth.models import User
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory
 from django.urls import reverse
@@ -53,6 +54,7 @@ class TestMainScreen(LoadTestDataMixin, NoSocketsTestCase):
         AuthUtils.add_permission_to_user_by_name(
             'standingssync.add_syncedcharacter', cls.user_2
         )        
+        cls.user_2 = User.objects.get(pk=cls.user_2.pk)
         cls.sync_char = SyncedCharacter.objects.create(
             manager=cls.sync_manager, character=cls.alt_ownership_1
         )

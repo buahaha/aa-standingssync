@@ -119,9 +119,9 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         
     # run normal sync for a character
     @patch(MODULE_PATH + '.Token')
-    @patch(MODULE_PATH + '.esi_client_factory')
+    @patch('standingssync.helpers.esi_fetch._esi_client')
     def test_normal_sync(
-        self, mock_esi_client_factory, mock_Token
+        self, mock_esi_client, mock_Token
     ):        
         characters_contacts = {
             int(self.character_2.character_id): dict()
@@ -135,38 +135,36 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             start = (mock_calls_count - 1) * page_size
             stop = start + page_size
             pages_count = int(math.ceil(len(ESI_CONTACTS) / page_size))
-            if mock_calls_count == 1:
-                mock_response = Mock()
-                mock_response.headers = {'x-pages': pages_count}
-                return [ESI_CONTACTS[start:stop], mock_response]
-            else:
-                return ESI_CONTACTS[start:stop]
+            mock_response = Mock()
+            mock_response.headers = {'x-pages': pages_count}
+            return [ESI_CONTACTS[start:stop], mock_response]
                 
         def esi_post_characters_character_id_contacts(
-            character_id, contact_ids, standing
+            character_id, contact_ids, standing, token
         ):
             for contact_id in contact_ids:
                 characters_contacts[int(character_id)][int(contact_id)] \
                     = standing
 
             return Mock()
-            
-        mock_client = Mock()
+                    
         mock_get_operation = Mock()        
         mock_get_operation.result.side_effect = get_contacts_page
-        mock_client.Contacts.get_characters_character_id_contacts = Mock(
-            return_value=mock_get_operation
-        )
+        mock_esi_client.return_value.Contacts.\
+            get_characters_character_id_contacts = Mock(
+                return_value=mock_get_operation
+            )
         mock_delete_result = Mock()
         mock_delete_result.result.return_value = 'ok'
-        mock_client.Contacts.delete_characters_character_id_contacts = Mock(
-            return_value=mock_delete_result
-        )        
-        mock_client.Contacts.post_characters_character_id_contacts = \
+        mock_esi_client.return_value\
+            .Contacts.delete_characters_character_id_contacts = Mock(
+                return_value=mock_delete_result
+            )        
+        mock_esi_client.return_value\
+            .Contacts.post_characters_character_id_contacts = \
             esi_post_characters_character_id_contacts
         
         # combine sub mocks into patch mock
-        mock_esi_client_factory.return_value = mock_client   
         mock_Token.objects.filter = Mock()
         
         AuthUtils.add_permission_to_user_by_name(
@@ -266,9 +264,9 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     # normal synch of new contacts
     @patch(MODULE_PATH + '.Token')
     @patch(MODULE_PATH + '.run_character_sync')
-    @patch(MODULE_PATH + '.esi_client_factory')
+    @patch('standingssync.helpers.esi_fetch._esi_client')
     def test_run_sync_normal(
-        self, mock_esi_client_factory, mock_run_character_sync, mock_Token
+        self, mock_esi_client, mock_run_character_sync, mock_Token
     ):        
         # create mocks
         def get_contacts_page(*args, **kwargs):
@@ -278,20 +276,16 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             start = (mock_calls_count - 1) * page_size
             stop = start + page_size
             pages_count = int(math.ceil(len(ESI_CONTACTS) / page_size))
-            if mock_calls_count == 1:
-                mock_response = Mock()
-                mock_response.headers = {'x-pages': pages_count}
-                return [ESI_CONTACTS[start:stop], mock_response]
-            else:
-                return ESI_CONTACTS[start:stop]
+            mock_response = Mock()
+            mock_response.headers = {'x-pages': pages_count}
+            return [ESI_CONTACTS[start:stop], mock_response]
         
-        mock_client = Mock()
         mock_operation = Mock()
         mock_operation.result.side_effect = get_contacts_page        
-        mock_client.Contacts.get_alliances_alliance_id_contacts = Mock(
-            return_value=mock_operation
-        )
-        mock_esi_client_factory.return_value = mock_client        
+        mock_esi_client.return_value.Contacts\
+            .get_alliances_alliance_id_contacts = Mock(
+                return_value=mock_operation
+            )        
         mock_run_character_sync.delay = Mock()
 
         mock_Token.objects.filter.return_value\

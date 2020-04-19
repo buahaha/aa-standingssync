@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.0.4] - 2020-04-19
+
+### Fixed
+
+- New attempt to reduce the memory leaks in celery workers
+
 ## [1.0.3] - 2020-04-12
 
 ### Changed
