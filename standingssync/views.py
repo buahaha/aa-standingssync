@@ -167,10 +167,8 @@ def add_character(request, token):
                 'Could not find character {}'.format(token_char.character_name)    
             )
         else:
-            if (
-                sync_manager.get_effective_standing(owned_char.character) 
-                < STANDINGSSYNC_CHAR_MIN_STANDING
-            ):
+            eff_standing = sync_manager.get_effective_standing(owned_char.character)
+            if eff_standing < STANDINGSSYNC_CHAR_MIN_STANDING:
                 messages_plus.warning(
                     request,
                     'Can not activate sync for your character {} '

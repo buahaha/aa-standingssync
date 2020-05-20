@@ -192,3 +192,9 @@ class LoadTestDataMixin():
             corporation_name=cls.character_5.corporation_name,
             member_count=1234
         )
+        cls.character_6 = EveCharacter.objects.create(
+            character_id=1099,
+            character_name='Joe Doe',
+            corporation_id=2005,
+            corporation_name='Daily Bugle'
+        )

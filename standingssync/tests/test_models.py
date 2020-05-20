@@ -12,7 +12,7 @@ MODULE_PATH = 'standingssync.models'
 logger = set_test_logger(MODULE_PATH, __file__)
 
 
-class TestSyncManager(LoadTestDataMixin, TestCase):
+class TestGetEffectiveStanding(LoadTestDataMixin, TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -53,8 +53,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
                 standing=contact['standing'],
             )
 
-    def test_get_effective_standing(self):        
-        # test
+    def test_char_with_character_standing(self):
         c1 = EveCharacter(
             character_id=101,
             character_name="Char 1",
@@ -64,6 +63,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
         )
         self.assertEqual(self.sync_manager.get_effective_standing(c1), -10)
 
+    def test_char_with_corporation_standing(self):
         c2 = EveCharacter(
             character_id=102,
             character_name="Char 2",
@@ -73,6 +73,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
         )
         self.assertEqual(self.sync_manager.get_effective_standing(c2), 10)
 
+    def test_char_with_alliance_standing(self):
         c3 = EveCharacter(
             character_id=103,
             character_name="Char 3",
@@ -85,6 +86,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
         )
         self.assertEqual(self.sync_manager.get_effective_standing(c3), 5)
 
+    def test_char_without_standing_and_has_alliance(self):
         c4 = EveCharacter(
             character_id=103,
             character_name="Char 3",
@@ -96,6 +98,71 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
             alliance_ticker="A2"
         )
         self.assertEqual(self.sync_manager.get_effective_standing(c4), 0)
+
+    def test_char_without_standing_and_without_alliance_1(self):
+        c4 = EveCharacter(
+            character_id=103,
+            character_name="Char 3",
+            corporation_id=203,
+            corporation_name="Corporation 3",
+            corporation_ticker="C2",
+            alliance_id=None,
+            alliance_name=None,
+            alliance_ticker=None
+        )
+        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0)
+
+    def test_char_without_standing_and_without_alliance_2(self):
+        c4 = EveCharacter(
+            character_id=103,
+            character_name="Char 3",
+            corporation_id=203,
+            corporation_name="Corporation 3",
+            corporation_ticker="C2"            
+        )
+        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0)
+
+
+class TestSyncManager(LoadTestDataMixin, TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        
+        # 1 user with 1 alt character
+        cls.user_1 = create_test_user(cls.character_1)
+        cls.main_ownership_1 = CharacterOwnership.objects.get(
+            character=cls.character_1, user=cls.user_1
+        )
+
+        cls.sync_manager = SyncManager.objects.create(
+            alliance=cls.alliance_1,
+            character=cls.main_ownership_1
+        )
+        contacts = [
+            {
+                'contact_id': 101,
+                'contact_type': 'character',
+                'standing': -10
+            },            
+            {
+                'contact_id': 201,
+                'contact_type': 'corporation',
+                'standing': 10
+            },
+            {
+                'contact_id': 301,
+                'contact_type': 'alliance',
+                'standing': 5
+            }
+        ]
+        for contact in contacts:
+            AllianceContact.objects.create(
+                manager=cls.sync_manager,
+                contact_id=contact['contact_id'],
+                contact_type=contact['contact_type'],
+                standing=contact['standing'],
+            )
 
     def test_set_sync_status(self):
         self.sync_manager.last_error = SyncManager.ERROR_NONE

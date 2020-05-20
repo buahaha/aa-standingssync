@@ -68,27 +68,23 @@ class SyncManager(models.Model):
     def get_effective_standing(self, character: EveCharacter):
         """ return the effective standing with this alliance"""
         
-        contacts = AllianceContact.objects.filter(manager=self)
-
-        # check if character is in contacts
-        c = [
-            x for x in contacts 
-            if x.contact_id == int(character.character_id)
-        ]
-        # else check if character's corporation is in contacts
-        if not c:
-            c = [
-                x for x in contacts 
-                if x.contact_id == int(character.corporation_id)
-            ]
-            # else check if character's alliances is in contacts
-            if character.alliance_id is not None and not c:
-                c = [
-                    x for x in contacts 
-                    if x.contact_id == int(character.alliance_id)
-                ]
-        
-        return c.pop().standing if c else 0
+        contacts = AllianceContact.objects.filter(manager=self).select_related()
+        contact_found = None
+        try:
+            contact_found = contacts.get(contact_id=int(character.character_id))
+        except AllianceContact.DoesNotExist:
+            try:
+                contact_found = contacts.get(contact_id=int(character.corporation_id))
+            except AllianceContact.DoesNotExist:
+                if character.alliance_id:
+                    try:
+                        contact_found = contacts.get(
+                            contact_id=int(character.alliance_id)
+                        )
+                    except AllianceContact.DoesNotExist:
+                        pass
+                
+        return contact_found.standing if contact_found else 0
     
     @classmethod
     def get_esi_scopes(cls) -> list:

@@ -59,7 +59,7 @@ class TestMainScreen(LoadTestDataMixin, NoSocketsTestCase):
             manager=cls.sync_manager, character=cls.alt_ownership_1
         )
         
-        # user 3has no permission
+        # user 3 has no permission
         cls.user_3 = create_test_user(cls.character_3)
         cls.factory = RequestFactory()
 
@@ -124,13 +124,16 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
                 standing=contact['standing'],
             )
         
-        # user 2 is a normal user and has two alts
+        # user 2 is a normal user and has three alts
         cls.user_2 = create_test_user(cls.character_2)
         cls.alt_ownership_1 = CharacterOwnership.objects.create(
             character=cls.character_4, owner_hash='x4', user=cls.user_2
         )
-        cls.alt_ownership_1 = CharacterOwnership.objects.create(
+        cls.alt_ownership_2 = CharacterOwnership.objects.create(
             character=cls.character_5, owner_hash='x5', user=cls.user_2
+        )
+        CharacterOwnership.objects.create(
+            character=cls.character_6, owner_hash='x6', user=cls.user_2
         )
         AuthUtils.add_permission_to_user_by_name(
             'standingssync.add_syncedcharacter', cls.user_2
@@ -170,6 +173,22 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects
             .filter(manager=self.sync_manager)
             .filter(character__character=self.character_4)
+            .exists()
+        )
+
+    @patch(MODULE_PATH + '.STANDINGSSYNC_CHAR_MIN_STANDING', 0)
+    def test_user_can_add_neutral_alt(
+        self, mock_messages_plus, mock_run_character_sync
+    ):        
+        response = self.make_request(self.user_2, self.character_6)        
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('standingssync:index'))
+        self.assertTrue(mock_messages_plus.success.called)
+        self.assertTrue(mock_run_character_sync.delay.called)
+        self.assertTrue(
+            SyncedCharacter.objects
+            .filter(manager=self.sync_manager)
+            .filter(character__character=self.character_6)
             .exists()
         )
 
@@ -264,7 +283,7 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
         cls.alt_ownership_1 = CharacterOwnership.objects.create(
             character=cls.character_4, owner_hash='x4', user=cls.user_2
         )
-        cls.alt_ownership_1 = CharacterOwnership.objects.create(
+        cls.alt_ownership_2 = CharacterOwnership.objects.create(
             character=cls.character_5, owner_hash='x5', user=cls.user_2
         )
         AuthUtils.add_permission_to_user_by_name(
