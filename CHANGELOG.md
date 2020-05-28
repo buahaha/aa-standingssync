@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.1.0] - 2020-05-28
+
+### Changed
+
+- Drops support for Python 3.5
+- Updated dependency for django-esi to exclude 2.0
+- Added timeout to ESI requests
+
 ## [1.0.4] - 2020-04-19
 
 ### Fixed

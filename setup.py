@@ -16,7 +16,9 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     license='MIT',
-    description='Standing sync for non-alliance characters - plugin for for Alliance Auth',
+    description=(
+        'Standing sync for non-alliance characters - plugin for for Alliance Auth'
+    ),
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://gitlab.com/ErikKalkoken/aa-standingssync',
@@ -36,7 +38,8 @@ setup(
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
     ],
-    python_requires='>=3.5',
-    install_requires=[        
+    python_requires='>=3.6',
+    install_requires=[
+        'django-esi<2.0',
     ]
 )
