@@ -13,7 +13,7 @@ class standingssyncMenuItem(MenuItemHook):
         MenuItemHook.__init__(
             self,
             _(__title__),
-            'fa fa-address-card fa-fw',
+            'fas fa-address-card fa-fw',
             'standingssync:index',
             navactive=['standingssync:index']
         )
