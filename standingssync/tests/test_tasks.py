@@ -1,4 +1,3 @@
-import math
 from unittest.mock import Mock, patch
 
 from allianceauth.authentication.models import CharacterOwnership
@@ -7,7 +6,7 @@ from allianceauth.tests.auth_utils import AuthUtils
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 
-from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS
+from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
 from .. import tasks
 from ..models import SyncManager, SyncedCharacter, AllianceContact
 from ..utils import set_test_logger, NoSocketsTestCase
@@ -111,17 +110,8 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
     def test_normal_sync(self, mock_esi_client, mock_Token):
         characters_contacts = {int(self.character_2.character_id): dict()}
 
-        # create mocks
-        def get_contacts_page(*args, **kwargs):
-            """returns single page for operation.result(), first with header"""
-            page_size = 5
-            mock_calls_count = len(mock_get_operation.mock_calls)
-            start = (mock_calls_count - 1) * page_size
-            stop = start + page_size
-            pages_count = int(math.ceil(len(ESI_CONTACTS) / page_size))
-            mock_response = Mock()
-            mock_response.headers = {"x-pages": pages_count}
-            return [ESI_CONTACTS[start:stop], mock_response]
+        def esi_get_characters_character_id_contacts(*args, **kwargs):
+            return BravadoOperationStub(ESI_CONTACTS)
 
         def esi_post_characters_character_id_contacts(
             character_id, contact_ids, standing, token
@@ -131,10 +121,9 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
 
             return Mock()
 
-        mock_get_operation = Mock()
-        mock_get_operation.result.side_effect = get_contacts_page
-        mock_esi_client.return_value.Contacts.get_characters_character_id_contacts = Mock(
-            return_value=mock_get_operation
+        mock_contacts = mock_esi_client.return_value.Contacts
+        mock_contacts.get_characters_character_id_contacts.side_effect = (
+            esi_get_characters_character_id_contacts
         )
         mock_delete_result = Mock()
         mock_delete_result.result.return_value = "ok"
@@ -147,7 +136,6 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
 
         # combine sub mocks into patch mock
         mock_Token.objects.filter = Mock()
-
         AuthUtils.add_permission_to_user_by_name(
             "standingssync.add_syncedcharacter", self.user_1
         )
@@ -155,11 +143,10 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         # run tests
         self.assertTrue(tasks.run_character_sync(self.synced_character.pk))
 
+        # check results
         self.synced_character.refresh_from_db()
         self.assertEqual(self.synced_character.last_error, SyncedCharacter.ERROR_NONE)
-        self.assertEqual(mock_get_operation.result.call_count, 4)
         self.assertEqual(mock_delete_result.result.call_count, 1)
-
         self.maxDiff = None
         expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
         self.assertDictEqual(
@@ -239,29 +226,18 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     def test_run_sync_normal(
         self, mock_esi_client, mock_run_character_sync, mock_Token
     ):
-        # create mocks
-        def get_contacts_page(*args, **kwargs):
-            """returns single page for operation.result(), first with header"""
-            page_size = 5
-            mock_calls_count = len(mock_operation.mock_calls)
-            start = (mock_calls_count - 1) * page_size
-            stop = start + page_size
-            pages_count = int(math.ceil(len(ESI_CONTACTS) / page_size))
-            mock_response = Mock()
-            mock_response.headers = {"x-pages": pages_count}
-            return [ESI_CONTACTS[start:stop], mock_response]
+        def esi_get_alliances_alliance_id_contacts(*args, **kwargs):
+            return BravadoOperationStub(ESI_CONTACTS)
 
-        mock_operation = Mock()
-        mock_operation.result.side_effect = get_contacts_page
-        mock_esi_client.return_value.Contacts.get_alliances_alliance_id_contacts = Mock(
-            return_value=mock_operation
+        mock_Contacts = mock_esi_client.return_value.Contacts
+        mock_Contacts.get_alliances_alliance_id_contacts.side_effect = (
+            esi_get_alliances_alliance_id_contacts
         )
         mock_run_character_sync.delay = Mock()
 
         mock_Token.objects.filter.return_value.require_scopes.return_value.require_valid.return_value.first.return_value = Mock(
             spec=Token
         )
-
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1, character=self.main_ownership_1
         )
@@ -274,9 +250,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.ERROR_NONE)
 
-        # should have tried to fetch contacts
-        self.assertEqual(mock_operation.result.call_count, 4)
-
+        # check results
         base_contact_ids = {x["contact_id"] for x in ESI_CONTACTS}
         base_contact_ids.add(self.character_1.alliance_id)
 

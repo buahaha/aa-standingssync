@@ -26,7 +26,7 @@ logger = LoggerAddTag(logging.getLogger(__name__), __title__)
 
 ESI_MAX_RETRIES = 3
 ESI_RETRY_SLEEP_SECS = 1
-ESI_API_TIMEOUT = 10
+ESI_TIMEOUT_ENABLED = True
 
 _my_esi_client = None
 
@@ -282,15 +282,28 @@ def _execute_esi_request(
             )
         try:
             operation = getattr(esi_category, esi_method_name)(**args)
+            result_args = {"timeout": (5, 30)} if ESI_TIMEOUT_ENABLED else {}
             if has_pages:
-                operation.also_return_response = True
-                response_object, response = operation.result(timeout=ESI_API_TIMEOUT)
-                if "x-pages" in response.headers:
+                if hasattr(operation, "request_config"):
+                    operation.request_config.also_return_response = True
+                    response_object, response = operation.result(**result_args)
+                elif hasattr(operation, "also_return_response"):
+                    operation.also_return_response = True
+                    response_object, response = operation.result(**result_args)
+                else:
+                    logger.warning(
+                        "django-esi API is not fully compatible. "
+                        "Falling back to fetching first page only from ESI"
+                    )
+                    response_object = operation.result(**result_args)
+                    response = None
+
+                if response and "x-pages" in response.headers:
                     pages = int(response.headers["x-pages"])
                 else:
                     pages = 0
             else:
-                response_object = operation.result()
+                response_object = operation.result(**result_args)
                 pages = 0
             break
 

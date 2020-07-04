@@ -17,7 +17,7 @@ setup(
     include_package_data=True,
     license="MIT",
     description=(
-        "Standing sync for non-alliance characters - plugin for for Alliance Auth"
+        "Standing sync for non-alliance characters - app for for Alliance Auth"
     ),
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -39,5 +39,5 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     ],
     python_requires=">=3.6",
-    install_requires=["django-esi<2.0",],
+    install_requires=["django-esi>1.5,<3",],
 )

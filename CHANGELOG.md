@@ -12,12 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - Added Black as mandatory linter
+- Added support for django-esi 2.x and backwards compatibility for 1.x
 
 ## [1.1.1] - 2020-06-30
 
 ### Changed
 
-- Update to Font Awesome v5. Thank you Peter Pfeufer for your contribution! 
+- Update to Font Awesome v5. Thank you Peter Pfeufer for your contribution!
 
 ## [1.1.0] - 2020-05-28
 
