@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.1.2] - 2020-07-04
+
+### Changed
+
+- Added Black as mandatory linter
+
 ## [1.1.1] - 2020-06-30
 
 ### Changed
