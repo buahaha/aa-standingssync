@@ -1,4 +1,4 @@
-default_app_config = 'standingssync.apps.SyncAltContactsConfig'
+default_app_config = "standingssync.apps.SyncAltContactsConfig"
 
-__version__ = '1.1.1'
-__title__ = 'Standings Sync'
+__version__ = "1.1.1"
+__title__ = "Standings Sync"

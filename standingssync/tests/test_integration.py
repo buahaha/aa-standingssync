@@ -9,28 +9,27 @@ from . import create_test_user, LoadTestDataMixin
 from ..utils import set_test_logger
 
 
-MODULE_PATH = 'standingssync.views'
+MODULE_PATH = "standingssync.views"
 logger = set_test_logger(MODULE_PATH, __file__)
 
 
 class TestNotSetup(LoadTestDataMixin, WebTest):
-    
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-                
+
         # user 2 is a normal user and has two alts
         cls.user_2 = create_test_user(cls.character_2)
         cls.alt_ownership = CharacterOwnership.objects.create(
-            character=cls.character_4, owner_hash='x4', user=cls.user_2
+            character=cls.character_4, owner_hash="x4", user=cls.user_2
         )
         cls.alt_ownership = CharacterOwnership.objects.create(
-            character=cls.character_5, owner_hash='x5', user=cls.user_2
+            character=cls.character_5, owner_hash="x5", user=cls.user_2
         )
 
     def test_show_info_to_user_when_not_yet_setup(self):
         AuthUtils.add_permission_to_user_by_name(
-            'standingssync.add_syncedcharacter', self.user_2
+            "standingssync.add_syncedcharacter", self.user_2
         )
-        page = self.app.get(reverse('standingssync:index'), user='Clark Kent')
-        self.assertIn('This app is not fully setup yet', page.text)
+        page = self.app.get(reverse("standingssync:index"), user="Clark Kent")
+        self.assertIn("This app is not fully setup yet", page.text)
