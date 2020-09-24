@@ -28,7 +28,9 @@ setup(
         "Environment :: Web Environment",
         "Framework :: Django",
         "Framework :: Django :: 2.2",
-        "Intended Audience :: Developers",
+        "Framework :: Django :: 3.0",
+        "Framework :: Django :: 3.1",
+        "Intended Audience :: End Users/Desktop",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
@@ -39,5 +41,12 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     ],
     python_requires=">=3.6",
-    install_requires=["django-esi>1.5,<3",],
+    install_requires=[
+        "allianceauth>=2.7.3",
+    ],
+    extras_require={
+        "testing": [
+            "django-webtest",
+        ]
+    },
 )
