@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.1.3] - 2020-09-24
+
+### Changed
+
+- Added Django 3 to test suite
+- Reformatted with new Black version
+
 ## [1.1.2] - 2020-07-04
 
 ### Changed

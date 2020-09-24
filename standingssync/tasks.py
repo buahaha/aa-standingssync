@@ -26,7 +26,7 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
 
     Will delete the sync character if necessary,
     e.g. if token is no longer valid or character is no longer blue
-    
+
     Args:
         sync_char_pk: primary key of sync character to run sync for
         force_sync: will ignore version_hash if set to true
