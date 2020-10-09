@@ -124,7 +124,7 @@ Here is a list of available settings for this app. They can be configured by add
 
 Name | Description | Default
 -- | -- | --
-`STANDINGSSYNC_CHAR_MIN_STANDING`| minimum standing a character needs to have with the alliance to be able to sync | `0.1`<br>*this means it has to have some blue standing, neutrals will rejected* | No
+`STANDINGSSYNC_CHAR_MIN_STANDING`| minimum standing a character needs to have with the alliance to be able to sync.<br>Set to `0.0` if you want to allow neutral alts to sync. | `0.1`<br>*character has to have some blue standing, neutrals will be rejected*
 
 ## Permissions
 

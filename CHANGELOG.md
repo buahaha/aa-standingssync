@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.1.4] - 2020-10-09
+
+### Changed
+
+- Changed logo to better reflect what this app does
+- Now logs to to extensions logger
+- Add improved logging for standing rejections
+- Added tests
+
+### Fixed
+
+- Minor fixes
+
 ## [1.1.3] - 2020-09-24
 
 ### Changed

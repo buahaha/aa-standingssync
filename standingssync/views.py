@@ -1,11 +1,11 @@
-import logging
-
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required, permission_required
 
 from esi.decorators import token_required
+
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
+from allianceauth.services.hooks import get_extension_logger
 
 from . import tasks, __title__
 from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
@@ -13,7 +13,7 @@ from .models import SyncManager, SyncedCharacter, AllianceContact
 from .utils import LoggerAddTag, messages_plus
 
 
-logger = LoggerAddTag(logging.getLogger(__name__), __package__)
+logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 @login_required
@@ -75,6 +75,8 @@ def add_alliance_manager(request, token):
     """add or update sync manager for an alliance"""
     success = True
     token_char = EveCharacter.objects.get(character_id=token.character_id)
+    owned_char = None
+    alliance = None
 
     if not token_char.alliance_id:
         messages_plus.warning(
@@ -161,12 +163,13 @@ def add_character(request, token):
             if eff_standing < STANDINGSSYNC_CHAR_MIN_STANDING:
                 messages_plus.warning(
                     request,
-                    "Can not activate sync for your character {} "
-                    ", because it does not have blue standing "
-                    "with the alliance. Please first obtain blue "
-                    "standing for your character and then try again.".format(
-                        token_char.character_name
-                    ),
+                    "Can not activate sync for your "
+                    f"character {token_char.character_name}, "
+                    "because it does not have blue standing "
+                    "with the alliance. "
+                    f"The standing value is: {eff_standing:.1f}. "
+                    "Please first obtain blue "
+                    "standing for your character and then try again.",
                 )
             else:
                 sync_character, _ = SyncedCharacter.objects.update_or_create(

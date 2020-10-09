@@ -14,7 +14,7 @@ class standingssyncMenuItem(MenuItemHook):
         MenuItemHook.__init__(
             self,
             _(__title__),
-            "fas fa-address-card fa-fw",
+            "fas fa-sync-alt",
             "standingssync:index",
             navactive=["standingssync:index"],
         )

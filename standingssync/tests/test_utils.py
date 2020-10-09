@@ -1,11 +1,15 @@
 from datetime import timedelta
+import json
 from unittest.mock import Mock, patch
 
 import requests
 
+from django.contrib.auth.models import User
+from django.http import HttpRequest
 from django.test import TestCase
 from django.utils import translation
 from django.utils.html import mark_safe
+from django.utils.timezone import now
 
 from ..utils import (
     clean_setting,
@@ -22,18 +26,20 @@ from ..utils import (
     create_link_html,
     add_bs_label_html,
     get_site_base_url,
+    JSONDateTimeDecoder,
+    JSONDateTimeEncoder,
+    generate_invalid_pk,
 )
 from ..utils import set_test_logger
-
 
 MODULE_PATH = "standingssync.utils"
 logger = set_test_logger(MODULE_PATH, __file__)
 
 
 class TestMessagePlus(TestCase):
-    @patch(MODULE_PATH + ".messages")
+    @patch(MODULE_PATH + ".messages", spec=True)
     def test_valid_call(self, mock_messages):
-        messages_plus.debug(Mock(), "Test Message")
+        messages_plus.debug(Mock(spec=HttpRequest), "Test Message")
         self.assertTrue(mock_messages.debug.called)
         call_args_list = mock_messages.debug.call_args_list
         args, kwargs = call_args_list[0]
@@ -51,19 +57,19 @@ class TestMessagePlus(TestCase):
     @patch(MODULE_PATH + ".messages")
     def test_all_levels(self, mock_messages):
         text = "Test Message"
-        messages_plus.error(Mock(), text)
+        messages_plus.error(Mock(spec=HttpRequest), text)
         self.assertTrue(mock_messages.error.called)
 
-        messages_plus.debug(Mock(), text)
+        messages_plus.debug(Mock(spec=HttpRequest), text)
         self.assertTrue(mock_messages.debug.called)
 
-        messages_plus.info(Mock(), text)
+        messages_plus.info(Mock(spec=HttpRequest), text)
         self.assertTrue(mock_messages.info.called)
 
-        messages_plus.success(Mock(), text)
+        messages_plus.success(Mock(spec=HttpRequest), text)
         self.assertTrue(mock_messages.success.called)
 
-        messages_plus.warning(Mock(), text)
+        messages_plus.warning(Mock(spec=HttpRequest), text)
         self.assertTrue(mock_messages.warning.called)
 
 
@@ -118,6 +124,12 @@ class TestCleanSetting(TestCase):
         self.assertEqual(result, 50)
 
     @patch(MODULE_PATH + ".settings")
+    def test_none_allowed_for_type_int(self, mock_settings):
+        mock_settings.TEST_SETTING_DUMMY = None
+        result = clean_setting("TEST_SETTING_DUMMY", 50)
+        self.assertIsNone(result)
+
+    @patch(MODULE_PATH + ".settings")
     def test_default_if_below_minimum_1(self, mock_settings):
         mock_settings.TEST_SETTING_DUMMY = -5
         result = clean_setting("TEST_SETTING_DUMMY", default_value=50)
@@ -140,6 +152,22 @@ class TestCleanSetting(TestCase):
         mock_settings.TEST_SETTING_DUMMY = "invalid type"
         with self.assertRaises(ValueError):
             clean_setting("TEST_SETTING_DUMMY", default_value=None)
+
+    @patch(MODULE_PATH + ".settings")
+    def test_when_value_in_choices_return_it(self, mock_settings):
+        mock_settings.TEST_SETTING_DUMMY = "bravo"
+        result = clean_setting(
+            "TEST_SETTING_DUMMY", default_value="alpha", choices=["alpha", "bravo"]
+        )
+        self.assertEqual(result, "bravo")
+
+    @patch(MODULE_PATH + ".settings")
+    def test_when_value_not_in_choices_return_default(self, mock_settings):
+        mock_settings.TEST_SETTING_DUMMY = "charlie"
+        result = clean_setting(
+            "TEST_SETTING_DUMMY", default_value="alpha", choices=["alpha", "bravo"]
+        )
+        self.assertEqual(result, "alpha")
 
 
 class TestTimeUntil(TestCase):
@@ -265,11 +293,28 @@ class TestGetSiteBaseUrl(NoSocketsTestCase):
         "https://www.mysite.com/not-valid/",
     )
     def test_return_dummy_if_url_defined_but_not_valid(self):
-        expected = "http://www.example.com"
+        expected = ""
         self.assertEqual(get_site_base_url(), expected)
 
     @patch(MODULE_PATH + ".settings")
     def test_return_dummy_if_url_not_defined(self, mock_settings):
         delattr(mock_settings, "ESI_SSO_CALLBACK_URL")
-        expected = "http://www.example.com"
+        expected = ""
         self.assertEqual(get_site_base_url(), expected)
+
+
+class TestJsonSerializer(NoSocketsTestCase):
+    def test_encode_decode(self):
+        my_dict = {"alpha": "hello", "bravo": now()}
+        my_json = json.dumps(my_dict, cls=JSONDateTimeEncoder)
+        my_dict_new = json.loads(my_json, cls=JSONDateTimeDecoder)
+        self.assertDictEqual(my_dict, my_dict_new)
+
+
+class TestGenerateInvalidPk(NoSocketsTestCase):
+    def test_normal(self):
+        User.objects.all().delete()
+        User.objects.create(username="John Doe", password="dummy")
+        invalid_pk = generate_invalid_pk(User)
+        with self.assertRaises(User.DoesNotExist):
+            User.objects.get(pk=invalid_pk)

@@ -83,7 +83,7 @@ class TestGetEffectiveStanding(LoadTestDataMixin, TestCase):
             alliance_name="Alliance 2",
             alliance_ticker="A2",
         )
-        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0)
+        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0.0)
 
     def test_char_without_standing_and_without_alliance_1(self):
         c4 = EveCharacter(
@@ -96,7 +96,7 @@ class TestGetEffectiveStanding(LoadTestDataMixin, TestCase):
             alliance_name=None,
             alliance_ticker=None,
         )
-        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0)
+        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0.0)
 
     def test_char_without_standing_and_without_alliance_2(self):
         c4 = EveCharacter(
@@ -106,7 +106,7 @@ class TestGetEffectiveStanding(LoadTestDataMixin, TestCase):
             corporation_name="Corporation 3",
             corporation_ticker="C2",
         )
-        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0)
+        self.assertEqual(self.sync_manager.get_effective_standing(c4), 0.0)
 
 
 class TestSyncManager(LoadTestDataMixin, TestCase):

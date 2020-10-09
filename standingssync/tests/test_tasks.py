@@ -9,7 +9,7 @@ from esi.errors import TokenExpiredError, TokenInvalidError
 from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
 from .. import tasks
 from ..models import SyncManager, SyncedCharacter, AllianceContact
-from ..utils import set_test_logger, NoSocketsTestCase
+from ..utils import set_test_logger, NoSocketsTestCase, generate_invalid_pk
 
 
 MODULE_PATH = "standingssync.tasks"
@@ -26,8 +26,11 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         cls.main_ownership_1 = CharacterOwnership.objects.get(
             character=cls.character_1, user=cls.user_1
         )
-        cls.alt_ownership = CharacterOwnership.objects.create(
+        alt_ownership_2 = CharacterOwnership.objects.create(
             character=cls.character_2, owner_hash="x2", user=cls.user_1
+        )
+        alt_ownership_3 = CharacterOwnership.objects.create(
+            character=cls.character_3, owner_hash="x3", user=cls.user_1
         )
 
         # sync manager with contacts
@@ -43,20 +46,23 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             )
 
         # sync char
-        cls.synced_character = SyncedCharacter.objects.create(
-            character=cls.alt_ownership, manager=cls.sync_manager
+        cls.synced_character_2 = SyncedCharacter.objects.create(
+            character=alt_ownership_2, manager=cls.sync_manager
+        )
+        cls.synced_character_3 = SyncedCharacter.objects.create(
+            character=alt_ownership_3, manager=cls.sync_manager
         )
 
-    # calling for an non existing sync character should raise an exception
     def test_run_character_sync_wrong_pk(self):
+        """calling for an non existing sync character should raise an exception"""
         with self.assertRaises(SyncedCharacter.DoesNotExist):
-            tasks.run_character_sync(99)
+            tasks.run_character_sync(generate_invalid_pk(SyncedCharacter))
 
     def test_delete_sync_character_if_insufficient_permission(self):
-        self.assertEqual(self.synced_character.last_error, SyncedCharacter.ERROR_NONE)
-        self.assertFalse(tasks.run_character_sync(self.synced_character.pk))
+        self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.ERROR_NONE)
+        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
         self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character.pk).exists()
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
     @patch(MODULE_PATH + ".Token")
@@ -65,9 +71,9 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         AuthUtils.add_permission_to_user_by_name(
             "standingssync.add_syncedcharacter", self.user_1
         )
-        self.assertFalse(tasks.run_character_sync(self.synced_character.pk))
+        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
         self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character.pk).exists()
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
     @patch(MODULE_PATH + ".Token")
@@ -76,11 +82,12 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         AuthUtils.add_permission_to_user_by_name(
             "standingssync.add_syncedcharacter", self.user_1
         )
-        self.assertFalse(tasks.run_character_sync(self.synced_character.pk))
+        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
         self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character.pk).exists()
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
+    @patch(MODULE_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
     @patch(MODULE_PATH + ".Token")
     def test_delete_sync_character_if_no_longer_blue(self, mock_Token):
         mock_Token.objects.filter.return_value = Mock()
@@ -95,20 +102,32 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         contact.save()
 
         # run tests
-        self.assertFalse(tasks.run_character_sync(self.synced_character.pk))
+        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
 
         self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character.pk).exists()
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
         # reset standing
         contact.standing = 10
         contact.save()
 
-    # run normal sync for a character
+    @patch(MODULE_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
     @patch(MODULE_PATH + ".Token")
     @patch("standingssync.helpers.esi_fetch._esi_client")
-    def test_normal_sync(self, mock_esi_client, mock_Token):
-        characters_contacts = {int(self.character_2.character_id): dict()}
+    def test_normal_sync_1(self, mock_esi_client, mock_Token):
+        """run normal sync for a character which has blue standing"""
+        self._run_sync(mock_esi_client, mock_Token, self.synced_character_2)
+
+    @patch(MODULE_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
+    @patch(MODULE_PATH + ".Token")
+    @patch("standingssync.helpers.esi_fetch._esi_client")
+    def test_normal_sync_2(self, mock_esi_client, mock_Token):
+        """run normal sync for a character which has no standing and allow neutrals"""
+        self._run_sync(mock_esi_client, mock_Token, self.synced_character_3)
+
+    def _run_sync(self, mock_esi_client, mock_Token, synced_character):
+        character_id = int(synced_character.character.character.character_id)
+        characters_contacts = {character_id: dict()}
 
         def esi_get_characters_character_id_contacts(*args, **kwargs):
             return BravadoOperationStub(ESI_CONTACTS)
@@ -125,8 +144,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         mock_contacts.get_characters_character_id_contacts.side_effect = (
             esi_get_characters_character_id_contacts
         )
-        mock_delete_result = Mock()
-        mock_delete_result.result.return_value = "ok"
+        mock_delete_result = Mock(**{"result.return_value": "ok"})
         mock_esi_client.return_value.Contacts.delete_characters_character_id_contacts = Mock(
             return_value=mock_delete_result
         )
@@ -141,17 +159,15 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         )
 
         # run tests
-        self.assertTrue(tasks.run_character_sync(self.synced_character.pk))
+        self.assertTrue(tasks.run_character_sync(synced_character.pk))
 
         # check results
-        self.synced_character.refresh_from_db()
-        self.assertEqual(self.synced_character.last_error, SyncedCharacter.ERROR_NONE)
+        synced_character.refresh_from_db()
+        self.assertEqual(synced_character.last_error, SyncedCharacter.ERROR_NONE)
         self.assertEqual(mock_delete_result.result.call_count, 1)
         self.maxDiff = None
         expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
-        self.assertDictEqual(
-            characters_contacts[int(self.character_2.character_id)], expected
-        )
+        self.assertDictEqual(characters_contacts[character_id], expected)
 
 
 class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):

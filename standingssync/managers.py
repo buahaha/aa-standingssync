@@ -1,10 +1,12 @@
-import logging
-
 from django.db import models
+
+from allianceauth.services.hooks import get_extension_logger
+
+from . import __title__
 from .utils import LoggerAddTag
 
 
-logger = LoggerAddTag(logging.getLogger(__name__), __package__)
+logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 class AllianceContactManager(models.Manager):

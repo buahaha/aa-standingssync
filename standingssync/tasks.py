@@ -1,23 +1,25 @@
 import hashlib
 import json
-import logging
 
 from celery import shared_task
 
 from django.db import transaction
 from django.contrib.auth.models import User
 
-from allianceauth.notifications import notify
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 
+from allianceauth.notifications import notify
+from allianceauth.services.hooks import get_extension_logger
+
+from . import __title__
 from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
 from .helpers.esi_fetch import esi_fetch
 from .models import SyncManager, SyncedCharacter, AllianceContact
 from .utils import LoggerAddTag, make_logger_prefix, chunks
 
 
-logger = LoggerAddTag(logging.getLogger(__name__), __package__)
+logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 @shared_task
@@ -51,7 +53,6 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             "Requested character with pk {} does not exist".format(sync_char_pk)
         )
     addTag = make_logger_prefix(synced_character)
-
     user = synced_character.character.user
     issue_title = "Standings Sync deactivated for {}".format(synced_character)
 
@@ -109,16 +110,24 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             synced_character.delete()
             return False
 
-        if (
-            manager.get_effective_standing(synced_character.character.character)
-            < STANDINGSSYNC_CHAR_MIN_STANDING
-        ):
+        character_eff_standing = manager.get_effective_standing(
+            synced_character.character.character
+        )
+        if character_eff_standing < STANDINGSSYNC_CHAR_MIN_STANDING:
+            logger.info(
+                addTag(
+                    "sync deactivated because character is no longer considered blue. "
+                    f"It's standing is: {character_eff_standing}, "
+                    f"while STANDINGSSYNC_CHAR_MIN_STANDING is: {STANDINGSSYNC_CHAR_MIN_STANDING} "
+                )
+            )
             notify(
                 user,
                 issue_title,
                 issue_message(
                     synced_character,
-                    "your character is no longer blue with the alliance",
+                    "your character is no longer blue with the alliance. "
+                    f"The standing value is: {character_eff_standing:.1f} ",
                 ),
             )
             synced_character.delete()
@@ -132,9 +141,9 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             _perform_contacts_sync_for_character(synced_character, token, addTag)
 
         except Exception as ex:
-            logger.error("An unexpected error ocurred: {}".format(ex))
+            logger.error("An unexpected error ocurred: %s", ex, exc_info=True)
             synced_character.set_sync_status(SyncedCharacter.ERROR_UNKNOWN)
-            raise
+            raise ex
 
     return True
 
@@ -207,9 +216,8 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
             "task called for non existing manager with pk {}".format(manager_pk)
         )
 
+    addTag = make_logger_prefix(sync_manager)
     try:
-        addTag = make_logger_prefix(sync_manager)
-
         if sync_manager.character is None:
             logger.error(addTag("No character configured to sync the alliance"))
             sync_manager.set_sync_status(SyncManager.ERROR_NO_CHARACTER)
@@ -259,11 +267,12 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
             logger.error(
                 addTag(
                     "An unexpected error ocurred while trying to "
-                    "sync alliance: {}".format(ex)
-                )
+                    f"sync alliance: {ex}"
+                ),
+                exc_info=True,
             )
             sync_manager.set_sync_status(SyncManager.ERROR_UNKNOWN)
-            raise RuntimeError()
+            raise ex()
 
     except Exception:
         success = False
@@ -293,8 +302,9 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
             logger.error(
                 addTag(
                     "An unexpected error ocurred while trying to "
-                    "report to user: {}".format(ex)
-                )
+                    f"report to user: {ex}"
+                ),
+                exc_info=True,
             )
 
     return success

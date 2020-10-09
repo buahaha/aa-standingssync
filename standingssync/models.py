@@ -1,15 +1,15 @@
-import logging
-
 from django.db import models
 from django.utils.timezone import now
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
+from allianceauth.services.hooks import get_extension_logger
 
+from . import __title__
 from .managers import AllianceContactManager
 from .utils import LoggerAddTag
 
-logger = LoggerAddTag(logging.getLogger(__name__), __package__)
+logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 class SyncManager(models.Model):
@@ -57,8 +57,8 @@ class SyncManager(models.Model):
         self.last_sync = now()
         self.save()
 
-    def get_effective_standing(self, character: EveCharacter):
-        """ return the effective standing with this alliance"""
+    def get_effective_standing(self, character: EveCharacter) -> float:
+        """return the effective standing with this alliance"""
 
         contacts = AllianceContact.objects.filter(manager=self).select_related()
         contact_found = None
@@ -76,7 +76,7 @@ class SyncManager(models.Model):
                     except AllianceContact.DoesNotExist:
                         pass
 
-        return contact_found.standing if contact_found else 0
+        return contact_found.standing if contact_found is not None else 0.0
 
     @classmethod
     def get_esi_scopes(cls) -> list:
