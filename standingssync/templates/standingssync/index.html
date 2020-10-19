@@ -1,26 +1,11 @@
 {% extends 'standingssync/base.html' %}
 {% load i18n %}
 {% load humanize %}
+{% load evelinks %}
 
 {% block details %}    
 
-    <div class="panel panel-primary">
-        <div class="panel-heading" style="display:flex;">
-            <h3 class="panel-title">{% trans 'Alliance Available for Sync' %}</h3>
-        </div>
-        <div class="panel-body">            
-            {% if alliance_contacts_count != None %}
-                <img class="ra-avatar img-circle" src="{{ alliance.logo_url }}">
-                &nbsp;&nbsp;
-                {{ alliance.alliance_name }}
-                &nbsp;                
-                ({{ alliance_contacts_count }} contacts)
-            {% else %}
-                None
-            {% endif %}
-        </div>
-    </div>
-    <div class="panel panel-primary">
+    <div class="panel panel-default">
         <div class="panel-heading" style="display:flex;">
             <h3 class="panel-title">{% trans 'Your Synced Characters' %}</h3>
         </div>
@@ -31,24 +16,29 @@
                         <tr>
                             <th></th>
                             <th>Name</th>
+                            <th>Synced with</th>
                             <th>Status</th>             
                             <th>Remove from Sync</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for character in characters %}
-                            {% if character.has_error %}                                    
+                            {% if character.has_error%}
                                 <tr class="danger">
                             {% else %}
                                 <tr>    
-                            {% endif %}                            
-                                <td class="text-center"><img class="ra-avatar img-circle" src="{{ character.portrait_url }}">
+                            {% endif %}            
+                                <td class="text-center">
+                                    <img class="ra-avatar img-circle" src="{{ character.portrait_url }}">
                                 </td>
                                 <td>{{ character.name }}</td>
+                                <td>{{ character.synced_with }}</td>
                                 <td>{{ character.status_message }}</td>
-                                <td><a class="btn btn-warning" href="{% url 'standingssync:remove_character' character.pk %}" role="button">
-                                    <span class="fa fa-trash" style="font-size: 120%;"></span>
-                                </a></td>
+                                <td>
+                                    <a class="btn btn-danger" href="{% url 'standingssync:remove_character' character.pk %}" role="button">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </a>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>                        
@@ -59,7 +49,42 @@
         </div>
     </div>
 
-    {% if alliance_contacts_count == None and not perms.standingssync.add_syncmanager %}
+    <div class="panel panel-default">
+        <div class="panel-heading" style="display:flex;">
+            <h3 class="panel-title">{% trans 'Add Characters To Sync' %}</h3>
+        </div>        
+        <div class="panel-body">            
+            {% if sync_managers %}                
+                Sync with: 
+                <div class="dropdown">
+                    <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                        {{ selected_manager.organization.name }}
+                        <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+                        {% for manager in sync_managers %}
+                            <li>
+                                <a href="{% url 'standingssync:index' %}?manager_pk={{ manager.pk }}">
+                                    {{ manager.organization.name }}&nbsp;
+                                    ({{ manager.num_contacts|intcomma }} contacts)
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <br>
+                <a id="standingssyncBtnAddSyncChar" class="btn btn-success" href="{% url 'standingssync:add_character' selected_manager.pk %}">
+                    Add Character
+                </a>
+
+            {% else %}
+                None
+            {% endif %}
+        </div>
+    </div>
+
+
+    {% if not sync_managers and not perms.standingssync.add_syncmanager %}
         <div class="bs-callout bs-callout-warning">
         <h4>Warning</h4>        
             <p>
@@ -72,14 +97,13 @@
                 Please contact an admin for details.</p>
         </div>   
     {% endif %}
-
-    {% if alliance_contacts_count != None %}            
-        <a id="standingssyncBtnAddSyncChar" class="btn btn-primary" href="{% url 'standingssync:add_character' %}">Add Character to Sync</a>    
-    {% endif %}
-    
+        
     {% if perms.standingssync.add_syncmanager %}        
-        <a class="btn btn-default" href="{% url 'standingssync:add_alliance_manager' %}">            
-            Set Alliance Character            
+        <a class="btn btn-default" href="{% url 'standingssync:add_alliance' %}">
+            Add Alliance
+        </a>
+        <a class="btn btn-default" href="{% url 'standingssync:add_corporation' %}">
+            Add Corporation
         </a>
     {% endif %}
 

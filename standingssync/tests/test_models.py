@@ -1,11 +1,13 @@
 from django.test import TestCase
 from django.utils.timezone import now
 
+from eveuniverse.models import EveEntity
+
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveCharacter
 
-from . import LoadTestDataMixin, create_test_user
-from ..models import SyncManager, AllianceContact, SyncedCharacter
+from . import LoadTestDataMixin, create_test_user, create_contacts_for_manager
+from ..models import SyncManager, SyncedCharacter
 from ..utils import set_test_logger
 
 MODULE_PATH = "standingssync.models"
@@ -24,20 +26,15 @@ class TestGetEffectiveStanding(LoadTestDataMixin, TestCase):
         )
 
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1
+            organization=EveEntity.objects.get(id=cls.alliance_1.alliance_id),
+            character_ownership=cls.main_ownership_1,
         )
         contacts = [
             {"contact_id": 101, "contact_type": "character", "standing": -10},
             {"contact_id": 201, "contact_type": "corporation", "standing": 10},
             {"contact_id": 301, "contact_type": "alliance", "standing": 5},
         ]
-        for contact in contacts:
-            AllianceContact.objects.create(
-                manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
-                standing=contact["standing"],
-            )
+        create_contacts_for_manager(cls.sync_manager, contacts)
 
     def test_char_with_character_standing(self):
         c1 = EveCharacter(
@@ -121,20 +118,15 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
         )
 
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1
+            organization=EveEntity.objects.get(id=cls.alliance_1.alliance_id),
+            character_ownership=cls.main_ownership_1,
         )
         contacts = [
             {"contact_id": 101, "contact_type": "character", "standing": -10},
             {"contact_id": 201, "contact_type": "corporation", "standing": 10},
             {"contact_id": 301, "contact_type": "alliance", "standing": 5},
         ]
-        for contact in contacts:
-            AllianceContact.objects.create(
-                manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
-                standing=contact["standing"],
-            )
+        create_contacts_for_manager(cls.sync_manager, contacts)
 
     def test_set_sync_status(self):
         self.sync_manager.last_error = SyncManager.ERROR_NONE
@@ -163,12 +155,14 @@ class TestSyncCharacter(LoadTestDataMixin, TestCase):
 
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            organization=EveEntity.objects.get(id=cls.alliance_1.alliance_id),
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
 
         # sync char
         cls.synced_character = SyncedCharacter.objects.create(
-            character=cls.alt_ownership, manager=cls.sync_manager
+            character_ownership=cls.alt_ownership, manager=cls.sync_manager
         )
 
     def test_get_last_error_message_after_sync(self):

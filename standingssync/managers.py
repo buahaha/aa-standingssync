@@ -9,12 +9,12 @@ from .utils import LoggerAddTag
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-class AllianceContactManager(models.Manager):
+class ContactManager(models.Manager):
     def grouped_by_standing(self, sync_manager: object) -> dict:
         """returns alliance contacts grouped by their standing as dict"""
-        from .models import AllianceContact
+        from .models import Contact
 
-        contacts = AllianceContact.objects.filter(manager=sync_manager)
+        contacts = Contact.objects.filter(manager=sync_manager)
         contacts_by_standing = dict()
         for contact in contacts:
             standing = contact.standing

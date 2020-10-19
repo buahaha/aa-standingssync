@@ -1,14 +1,21 @@
 from unittest.mock import Mock, patch
 
+from esi.models import Token
+from esi.errors import TokenExpiredError, TokenInvalidError
+from eveuniverse.models import EveEntity
+
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.tests.auth_utils import AuthUtils
 
-from esi.models import Token
-from esi.errors import TokenExpiredError, TokenInvalidError
-
-from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
+from . import (
+    create_test_user,
+    LoadTestDataMixin,
+    ESI_CONTACTS,
+    BravadoOperationStub,
+    create_contacts_for_manager,
+)
 from .. import tasks
-from ..models import SyncManager, SyncedCharacter, AllianceContact
+from ..models import SyncManager, SyncedCharacter, Contact
 from ..utils import set_test_logger, NoSocketsTestCase, generate_invalid_pk
 
 
@@ -35,22 +42,18 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
 
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            organization=EveEntity.objects.get(id=cls.alliance_1.alliance_id),
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
-        for contact in ESI_CONTACTS:
-            AllianceContact.objects.create(
-                manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
-                standing=contact["standing"],
-            )
+        create_contacts_for_manager(cls.sync_manager, ESI_CONTACTS)
 
         # sync char
         cls.synced_character_2 = SyncedCharacter.objects.create(
-            character=alt_ownership_2, manager=cls.sync_manager
+            character_ownership=alt_ownership_2, manager=cls.sync_manager
         )
         cls.synced_character_3 = SyncedCharacter.objects.create(
-            character=alt_ownership_3, manager=cls.sync_manager
+            character_ownership=alt_ownership_3, manager=cls.sync_manager
         )
 
     def test_run_character_sync_wrong_pk(self):
@@ -95,8 +98,8 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             "standingssync.add_syncedcharacter", self.user_1
         )
         # set standing for sync contact to non blue
-        contact = AllianceContact.objects.get(
-            manager=self.sync_manager, contact_id=int(self.character_2.character_id)
+        contact = Contact.objects.get(
+            manager=self.sync_manager, eve_entity_id=int(self.character_2.character_id)
         )
         contact.standing = -10
         contact.save()
@@ -126,7 +129,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         self._run_sync(mock_esi_client, mock_Token, self.synced_character_3)
 
     def _run_sync(self, mock_esi_client, mock_Token, synced_character):
-        character_id = int(synced_character.character.character.character_id)
+        character_id = int(synced_character.character_ownership.character.character_id)
         characters_contacts = {character_id: dict()}
 
         def esi_get_characters_character_id_contacts(*args, **kwargs):
@@ -200,7 +203,9 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             tasks.run_manager_sync(99999)
 
     def test_abort_when_no_char(self):
-        sync_manager = SyncManager.objects.create(alliance=self.alliance_1)
+        sync_manager = SyncManager.objects.create(
+            organization=EveEntity.objects.get(id=self.alliance_1.alliance_id),
+        )
         self.assertFalse(
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
         )
@@ -210,7 +215,8 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     # run without char
     def test_abort_when_insufficient_permission(self):
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_2
+            organization=EveEntity.objects.get(id=self.alliance_1.alliance_id),
+            character_ownership=self.main_ownership_2,
         )
         self.assertFalse(
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_2.pk)
@@ -227,7 +233,8 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         )
 
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            organization=EveEntity.objects.get(id=self.alliance_1.alliance_id),
+            character_ownership=self.main_ownership_1,
         )
         self.assertFalse(
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
@@ -255,10 +262,11 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             spec=Token
         )
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            organization=EveEntity.objects.get(id=self.alliance_1.alliance_id),
+            character_ownership=self.main_ownership_1,
         )
         SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=sync_manager
+            character_ownership=self.alt_ownership, manager=sync_manager
         )
 
         # run manager sync
@@ -271,7 +279,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         base_contact_ids.add(self.character_1.alliance_id)
 
         alliance_contact_ids = {
-            x.contact_id for x in AllianceContact.objects.filter(manager=sync_manager)
+            x.eve_entity_id for x in Contact.objects.filter(manager=sync_manager)
         }
 
         self.assertSetEqual(base_contact_ids, alliance_contact_ids)
@@ -284,14 +292,18 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
 
         # create 1st sync manager
         SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            organization=EveEntity.objects.get(id=self.alliance_1.alliance_id),
+            character_ownership=self.main_ownership_1,
         )
         # create 2nd sync manager
         self.user_3 = create_test_user(self.character_3)
         main_ownership2 = CharacterOwnership.objects.get(
             character=self.character_3, user=self.user_3
         )
-        SyncManager.objects.create(alliance=self.alliance_3, character=main_ownership2)
+        SyncManager.objects.create(
+            organization=EveEntity.objects.get(id=self.alliance_3.alliance_id),
+            character_ownership=main_ownership2,
+        )
         # run regular sync
         tasks.run_regular_sync()
 
@@ -303,10 +315,11 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     def test_run_sync_expired_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            organization=EveEntity.objects.get(id=self.alliance_1.alliance_id),
+            character_ownership=self.main_ownership_1,
         )
         SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=sync_manager
+            character_ownership=self.alt_ownership, manager=sync_manager
         )
 
         # run manager sync
@@ -320,10 +333,11 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     def test_run_sync_invalid_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            organization=EveEntity.objects.get(id=self.alliance_1.alliance_id),
+            character_ownership=self.main_ownership_1,
         )
         SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=sync_manager
+            character_ownership=self.alt_ownership, manager=sync_manager
         )
 
         # run manager sync

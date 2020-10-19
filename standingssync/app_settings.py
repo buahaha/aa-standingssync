@@ -6,3 +6,8 @@ from .utils import clean_setting
 STANDINGSSYNC_CHAR_MIN_STANDING = clean_setting(
     "STANDINGSSYNC_CHAR_MIN_STANDING", default_value=0.1, min_value=-10, max_value=10
 )
+
+# This app can sync standings either with an alliance or a corporation
+STANDINGSSYNC_OPERATION_MODE = clean_setting(
+    "STANDINGSSYNC_OPERATION_MODE", "alliance", choices=["alliance", "corporation"]
+)

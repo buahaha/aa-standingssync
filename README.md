@@ -40,7 +40,15 @@ To enable non-alliance members to use alliance standings the personal contact of
 
 ## Installation
 
-### 1. Install app
+### Step 1 - Check Preconditions
+
+Please make sure you meet all preconditions before proceeding:
+
+1. Standing Sync is a plugin for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth). If you don't have Alliance Auth running already, please install it first before proceeding. (see the official [AA installation guide](https://allianceauth.readthedocs.io/en/latest/installation/auth/allianceauth/) for details)
+
+2. Standing Sync needs the app [django-eveuniverse](https://gitlab.com/ErikKalkoken/django-eveuniverse) to function. Please make sure it is installed, before continuing.
+
+### Step 2 - Install app
 
 Install into AA virtual environment with PIP install ffrom PyPI:
 
@@ -48,7 +56,7 @@ Install into AA virtual environment with PIP install ffrom PyPI:
 pip install aa-standingssync
 ```
 
-### 2 Update Eve Online app
+### Step 3 - Update Eve Online app
 
 Update the Eve Online app used for authentication in your AA installation to include the following scopes:
 
@@ -58,7 +66,7 @@ esi-characters.write_contacts.v1
 esi-alliances.read_contacts.v1
 ```
 
-### 3. Configure AA settings
+### Step 4 - Configure AA settings
 
 Configure your AA settings (`local.py`) as follows:
 
@@ -75,7 +83,7 @@ Configure your AA settings (`local.py`) as follows:
 
    > **Note**:<br>This configures the sync process to run every 2 hours starting at 00:00 AM UTC. Feel free to adjust the timing to the needs of you alliance.<br>However, do not schedule it too tightly. Or you risk generating more and more tasks, when sync tasks from previous runs are not able to finish within the alloted time.
 
-### 4. Finalize installation into AA
+### Step 5 - Finalize installation into AA
 
 Run migrations & copy static files
 
@@ -86,11 +94,11 @@ python manage.py collectstatic
 
 Restart your supervisor services for AA
 
-### 5. Setup permissions
+### Step 6 - Setup permissions
 
 Now you can access Alliance Auth and setup permissions for your users. See section "Permissions" below for details.
 
-### 6. Setup alliance character
+### Step 7 - Setup alliance character
 
 Finally you need to set the alliance character that will be used for fetching the alliance contacts / standing. Just click on "Set Alliance Character" and add the requested token. Note that only users with the appropriate permission will be able to see and use this function.
 

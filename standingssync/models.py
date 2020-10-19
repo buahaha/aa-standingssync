@@ -1,19 +1,23 @@
 from django.db import models
 from django.utils.timezone import now
 
+from eveuniverse.models import EveEntity
+
 from allianceauth.authentication.models import CharacterOwnership
-from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
+from allianceauth.eveonline.models import EveCharacter
 from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
-from .managers import AllianceContactManager
+from .managers import ContactManager
 from .utils import LoggerAddTag
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 class SyncManager(models.Model):
-    """An object for managing syncing of contacts for an alliance"""
+    """An object for managing syncing of contacts
+    for an Eve Online alliance or corporation
+    """
 
     ERROR_NONE = 0
     ERROR_TOKEN_INVALID = 1
@@ -33,23 +37,30 @@ class SyncManager(models.Model):
         (ERROR_UNKNOWN, "Unknown error"),
     ]
 
-    alliance = models.OneToOneField(
-        EveAllianceInfo, on_delete=models.CASCADE, primary_key=True
+    organization = models.OneToOneField(
+        EveEntity,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        help_text="organization contacts are fetched from",
     )
-    # alliance contacts are fetched from this character
-    character = models.OneToOneField(
-        CharacterOwnership, on_delete=models.SET_NULL, null=True, default=None
+    character_ownership = models.ForeignKey(
+        CharacterOwnership,
+        on_delete=models.SET_NULL,
+        null=True,
+        default=None,
+        help_text="contacts are fetched from this owned character",
     )
-    version_hash = models.CharField(max_length=32, null=True, default=None)
+    version_hash = models.CharField(max_length=32, default="")
     last_sync = models.DateTimeField(null=True, default=None)
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
 
     def __str__(self):
-        if self.character is not None:
-            character_name = self.character.character.character_name
-        else:
-            character_name = "None"
-        return "{} ({})".format(self.alliance.alliance_name, character_name)
+        character_name = (
+            self.character_ownership.character.character_name
+            if self.character_ownership
+            else "(None)"
+        )
+        return f"{self.organization.name}-{character_name}"
 
     def set_sync_status(self, status):
         """sets the sync status with the current date and time"""
@@ -58,33 +69,35 @@ class SyncManager(models.Model):
         self.save()
 
     def get_effective_standing(self, character: EveCharacter) -> float:
-        """return the effective standing with this alliance"""
+        """return the effective standing with this organization"""
 
-        contacts = AllianceContact.objects.filter(manager=self).select_related()
+        contacts = self.contacts.all()
         contact_found = None
         try:
-            contact_found = contacts.get(contact_id=int(character.character_id))
-        except AllianceContact.DoesNotExist:
+            contact_found = contacts.get(eve_entity_id=int(character.character_id))
+        except Contact.DoesNotExist:
             try:
-                contact_found = contacts.get(contact_id=int(character.corporation_id))
-            except AllianceContact.DoesNotExist:
+                contact_found = contacts.get(
+                    eve_entity_id=int(character.corporation_id)
+                )
+            except Contact.DoesNotExist:
                 if character.alliance_id:
                     try:
                         contact_found = contacts.get(
-                            contact_id=int(character.alliance_id)
+                            eve_entity_id=int(character.alliance_id)
                         )
-                    except AllianceContact.DoesNotExist:
+                    except Contact.DoesNotExist:
                         pass
 
         return contact_found.standing if contact_found is not None else 0.0
 
     @classmethod
     def get_esi_scopes(cls) -> list:
-        return ["esi-alliances.read_contacts.v1"]
+        return ["esi-alliances.read_contacts.v1", "esi-corporations.read_contacts.v1"]
 
 
 class SyncedCharacter(models.Model):
-    """A character that has his personal contacts synced with an alliance"""
+    """A character that has his personal contacts synced"""
 
     ERROR_NONE = 0
     ERROR_TOKEN_INVALID = 1
@@ -102,16 +115,18 @@ class SyncedCharacter(models.Model):
         (ERROR_UNKNOWN, "Unknown error"),
     ]
 
-    character = models.OneToOneField(
+    character_ownership = models.OneToOneField(
         CharacterOwnership, on_delete=models.CASCADE, primary_key=True
     )
-    manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
-    version_hash = models.CharField(max_length=32, null=True, default=None)
+    manager = models.ForeignKey(
+        SyncManager, on_delete=models.CASCADE, related_name="characters"
+    )
+    version_hash = models.CharField(max_length=32, default="", db_index=True)
     last_sync = models.DateTimeField(null=True, default=None)
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
 
     def __str__(self):
-        return self.character.character.character_name
+        return self.character_ownership.character.character_name
 
     def set_sync_status(self, status):
         """sets the sync status with the current date and time"""
@@ -134,22 +149,24 @@ class SyncedCharacter(models.Model):
         return ["esi-characters.read_contacts.v1", "esi-characters.write_contacts.v1"]
 
 
-class AllianceContact(models.Model):
-    """An alliance contact with standing"""
+class Contact(models.Model):
+    """An Eve Online contact"""
 
-    manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
-    contact_id = models.IntegerField()
-    contact_type = models.CharField(max_length=32)
+    manager = models.ForeignKey(
+        SyncManager, on_delete=models.CASCADE, related_name="contacts"
+    )
+    eve_entity = models.ForeignKey(EveEntity, on_delete=models.CASCADE)
+
     standing = models.FloatField()
 
-    objects = AllianceContactManager()
+    objects = ContactManager()
 
     def __str__(self):
-        return "{}:{}".format(self.contact_type, self.contact_id)
+        return "{}:{}".format(self.manager, self.eve_entity.name)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["manager", "contact_id"], name="manager-contacts-unq"
+                fields=["manager", "eve_entity"], name="functional_pk_evecontact"
             )
         ]

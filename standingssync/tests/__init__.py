@@ -4,6 +4,8 @@ from unittest.mock import Mock
 
 from django.contrib.auth.models import User
 
+from eveuniverse.models import EveEntity
+
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import (
     EveCharacter,
@@ -11,6 +13,8 @@ from allianceauth.eveonline.models import (
     EveAllianceInfo,
 )
 from allianceauth.tests.auth_utils import AuthUtils
+
+from ..models import Contact
 
 
 class BravadoOperationStub:
@@ -71,10 +75,59 @@ def create_test_user(character: EveCharacter) -> User:
     return user
 
 
+def create_contacts_for_manager(sync_manager, contacts: list):
+    for contact in contacts:
+        eve_entity, _ = EveEntity.objects.get_or_create(id=contact["contact_id"])
+        Contact.objects.create(
+            manager=sync_manager,
+            eve_entity=eve_entity,
+            standing=contact["standing"],
+        )
+
+
+def load_eveentities():
+    for character in EveCharacter.objects.all():
+        EveEntity.objects.get_or_create(
+            id=character.character_id,
+            defaults={
+                "name": character.character_name,
+                "category": EveEntity.CATEGORY_CHARACTER,
+            },
+        )
+        EveEntity.objects.get_or_create(
+            id=character.corporation_id,
+            defaults={
+                "name": character.corporation_name,
+                "category": EveEntity.CATEGORY_CORPORATION,
+            },
+        )
+        if character.alliance_id:
+            EveEntity.objects.get_or_create(
+                id=character.alliance_id,
+                defaults={
+                    "name": character.alliance_name,
+                    "category": EveEntity.CATEGORY_ALLIANCE,
+                },
+            )
+
+    for contact in ESI_CONTACTS:
+        EveEntity.objects.get_or_create(
+            id=contact.get("contact_id"),
+            defaults={
+                "name": "Dummy " + str(contact.get("contact_id")),
+                "category": contact.get("category"),
+            },
+        )
+
+
 class LoadTestDataMixin:
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        EveCharacter.objects.all().delete()
+        EveCorporationInfo.objects.all().delete()
+        EveAllianceInfo.objects.all().delete()
+        EveEntity.objects.all().delete()
         cls.character_1 = EveCharacter.objects.create(
             character_id=1001,
             character_name="Bruce Wayne",
@@ -147,3 +200,4 @@ class LoadTestDataMixin:
             corporation_id=2005,
             corporation_name="Daily Bugle",
         )
+        load_eveentities()

@@ -7,7 +7,7 @@ from . import tasks
 class SyncedCharacterAdmin(admin.ModelAdmin):
     list_display = (
         "user",
-        "character_name",
+        "_character_name",
         "version_hash",
         "last_sync",
         "last_error",
@@ -17,18 +17,23 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
         "last_error",
         "version_hash",
         "last_sync",
-        "character__user",
+        "character_ownership__user",
         "manager",
     )
     actions = ["start_sync_contacts"]
 
     list_display_links = None
+    list_select_related = (
+        "character_ownership__user",
+        "character_ownership__character",
+        "manager",
+    )
 
     def user(self, obj):
-        return obj.character.user
+        return obj.character_ownership.user
 
-    def character_name(self, obj):
-        return obj.__str__()
+    def _character_name(self, obj):
+        return obj.character_ownership.character
 
     # This will help you to disbale add functionality
     def has_add_permission(self, request):
@@ -49,34 +54,46 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
 @admin.register(SyncManager)
 class SyncManagerAdmin(admin.ModelAdmin):
     list_display = (
-        "alliance_name",
-        "contacts_count",
-        "synced_characters_count",
-        "user",
-        "character_name",
+        "organization",
+        "_category",
+        "_contacts_count",
+        "_synced_characters_count",
+        "_user",
+        "_character_name",
         "version_hash",
         "last_sync",
         "last_error",
     )
 
     list_display_links = None
+    list_select_related = (
+        "character_ownership__user",
+        "character_ownership__character",
+        "organization",
+    )
 
     actions = ["start_sync_managers"]
 
-    def user(self, obj):
-        return obj.character.user if obj.character else None
+    def _user(self, obj):
+        return obj.character_ownership.user if obj.character_ownership else None
 
-    def character_name(self, obj):
-        return obj.__str__()
+    def _character_name(self, obj):
+        return (
+            obj.character_ownership.character
+            if obj.character_ownership.character
+            else None
+        )
 
-    def alliance_name(self, obj):
-        return obj.alliance.alliance_name
+    def _category(self, obj):
+        return obj.organization.category
 
-    def contacts_count(self, obj):
-        return "{:,}".format(obj.alliancecontact_set.count())
+    _category.admin_order_field = "organization__category"
 
-    def synced_characters_count(self, obj):
-        return "{:,}".format(obj.syncedcharacter_set.count())
+    def _contacts_count(self, obj):
+        return "{:,}".format(obj.contacts.count())
+
+    def _synced_characters_count(self, obj):
+        return "{:,}".format(obj.characters.count())
 
     # This will help you to disbale add functionality
     def has_add_permission(self, request):
