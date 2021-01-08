@@ -1,7 +1,5 @@
 """Utility functions and classes for tests"""
 
-from unittest.mock import Mock
-
 from django.contrib.auth.models import User
 
 from allianceauth.authentication.models import CharacterOwnership
@@ -20,6 +18,10 @@ class BravadoOperationStub:
         def __init__(self, also_return_response):
             self.also_return_response = also_return_response
 
+    class ResponseStub:
+        def __init__(self, headers):
+            self.headers = headers
+
     def __init__(self, data, headers: dict = None, also_return_response: bool = False):
         self._data = data
         self._headers = headers if headers else {"x-pages": 1}
@@ -27,10 +29,12 @@ class BravadoOperationStub:
 
     def result(self, **kwargs):
         if self.request_config.also_return_response:
-            mock_response = Mock(**{"headers": self._headers})
-            return [self._data, mock_response]
+            return [self._data, self.ResponseStub(self._headers)]
         else:
             return self._data
+
+    def results(self, **kwargs):
+        return self.result(**kwargs)
 
 
 ESI_CONTACTS = [

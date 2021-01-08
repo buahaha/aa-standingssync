@@ -14,8 +14,8 @@ from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
 from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
-from .helpers.esi_fetch import esi_fetch
 from .models import SyncManager, SyncedCharacter, AllianceContact
+from .providers import esi
 from .utils import LoggerAddTag, make_logger_prefix, chunks
 
 
@@ -152,22 +152,19 @@ def _perform_contacts_sync_for_character(synced_character, token, addTag):
     logger.info(addTag("Updating contacts with new version"))
     character_id = synced_character.character.character.character_id
     # get current contacts
-    character_contacts = esi_fetch(
-        "Contacts.get_characters_character_id_contacts",
-        args={"character_id": character_id},
-        has_pages=True,
-        token=token,
-    )
+    character_contacts = esi.client.Contacts.get_characters_character_id_contacts(
+        token=token.valid_access_token(), character_id=character_id
+    ).results()
     # delete all current contacts
     max_items = 20
     contact_ids_chunks = chunks(
         [x["contact_id"] for x in character_contacts], max_items
     )
     for contact_ids_chunk in contact_ids_chunks:
-        esi_fetch(
-            "Contacts.delete_characters_character_id_contacts",
-            args={"character_id": character_id, "contact_ids": contact_ids_chunk},
-            token=token,
+        esi.client.Contacts.delete_characters_character_id_contacts(
+            token=token.valid_access_token(),
+            character_id=character_id,
+            contact_ids=contact_ids_chunk,
         )
 
     # write alliance contacts to ESI
@@ -180,14 +177,11 @@ def _perform_contacts_sync_for_character(synced_character, token, addTag):
             [c.contact_id for c in contacts_by_standing[standing]], max_items
         )
         for contact_ids_chunk in contact_ids_chunks:
-            esi_fetch(
-                "Contacts.post_characters_character_id_contacts",
-                args={
-                    "character_id": character_id,
-                    "contact_ids": contact_ids_chunk,
-                    "standing": standing,
-                },
-                token=token,
+            esi.client.Contacts.post_characters_character_id_contacts(
+                token=token.valid_access_token(),
+                character_id=character_id,
+                contact_ids=contact_ids_chunk,
+                standing=standing,
             )
 
     # store updated version hash with character
@@ -313,12 +307,9 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
 def _perform_contacts_sync_for_manager(sync_manager, token, addTag, force_sync):
     # get alliance contacts
     alliance_id = int(sync_manager.character.character.alliance_id)
-    contacts = esi_fetch(
-        "Contacts.get_alliances_alliance_id_contacts",
-        args={"alliance_id": alliance_id},
-        has_pages=True,
-        token=token,
-    )
+    contacts = esi.client.Contacts.get_alliances_alliance_id_contacts(
+        token=token.valid_access_token(), alliance_id=alliance_id
+    ).results()
 
     # determine if contacts have changed by comparing their hashes
     new_version_hash = hashlib.md5(json.dumps(contacts).encode("utf-8")).hexdigest()
