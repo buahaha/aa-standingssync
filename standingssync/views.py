@@ -37,24 +37,20 @@ def index(request):
     characters_query = SyncedCharacter.objects.select_related(
         "character__character"
     ).filter(character__user=request.user)
-
-    characters = list()
-    for character in characters_query:
-        characters.append(
-            {
-                "portrait_url": character.character.character.portrait_url,
-                "name": character.character.character.character_name,
-                "status_message": character.get_status_message(),
-                "has_error": character.last_error != SyncedCharacter.ERROR_NONE,
-                "pk": character.pk,
-            }
-        )
-
-    has_synced_chars = characters_query.count() > 0
+    characters = [
+        {
+            "portrait_url": character.character.character.portrait_url,
+            "name": character.character.character.character_name,
+            "status_message": character.get_status_message(),
+            "has_error": character.last_error != SyncedCharacter.ERROR_NONE,
+            "pk": character.pk,
+        }
+        for character in characters_query
+    ]
     context = {
         "app_title": __title__,
         "characters": characters,
-        "has_synced_chars": has_synced_chars,
+        "has_synced_chars": len(characters) > 0,
     }
     if sync_manager is not None:
         context["alliance"] = sync_manager.alliance

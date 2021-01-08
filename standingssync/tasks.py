@@ -336,6 +336,7 @@ def _perform_contacts_sync_for_manager(sync_manager, token, addTag, force_sync):
         }
         with transaction.atomic():
             AllianceContact.objects.filter(manager=sync_manager).delete()
+            # TODO: Change to bulk create
             for contact_id, contact in contacts_unique.items():
                 AllianceContact.objects.create(
                     manager=sync_manager,
@@ -349,11 +350,13 @@ def _perform_contacts_sync_for_manager(sync_manager, token, addTag, force_sync):
         logger.info(addTag("Alliance contacts are unchanged."))
 
     # dispatch tasks for characters that need syncing
-    alts_need_syncing = SyncedCharacter.objects.filter(manager=sync_manager).exclude(
-        version_hash=new_version_hash
+    alts_need_syncing = (
+        SyncedCharacter.objects.filter(manager=sync_manager)
+        .exclude(version_hash=new_version_hash)
+        .values_list("pk", flat=True)
     )
-    for character in alts_need_syncing:
-        run_character_sync.delay(character.pk)
+    for character_pk in alts_need_syncing:
+        run_character_sync.delay(character_pk)
 
     sync_manager.set_sync_status(SyncManager.ERROR_NONE)
 
@@ -361,5 +364,5 @@ def _perform_contacts_sync_for_manager(sync_manager, token, addTag, force_sync):
 @shared_task
 def run_regular_sync():
     """syncs all managers and related characters if needed"""
-    for sync_manager in SyncManager.objects.all():
-        run_manager_sync.delay(sync_manager.pk)
+    for sync_manager_pk in SyncManager.objects.values_list("pk", flat=True):
+        run_manager_sync.delay(sync_manager_pk)
