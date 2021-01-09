@@ -36,7 +36,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for character in characters %}
+                        {% for character in synced_characters %}
                             {% if character.has_error %}
                                 <tr class="danger">
                             {% else %}

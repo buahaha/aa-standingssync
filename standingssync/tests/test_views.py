@@ -33,7 +33,9 @@ class TestMainScreen(LoadTestDataMixin, NoSocketsTestCase):
         )
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            alliance=cls.alliance_1,
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
         for contact in ESI_CONTACTS:
             AllianceContact.objects.create(
@@ -53,7 +55,7 @@ class TestMainScreen(LoadTestDataMixin, NoSocketsTestCase):
         )
         cls.user_2 = User.objects.get(pk=cls.user_2.pk)
         cls.sync_char = SyncedCharacter.objects.create(
-            manager=cls.sync_manager, character=cls.alt_ownership_1
+            manager=cls.sync_manager, character_ownership=cls.alt_ownership_1
         )
 
         # user 3 has no permission
@@ -104,7 +106,9 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
         )
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            alliance=cls.alliance_1,
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
         for contact in ESI_CONTACTS:
             AllianceContact.objects.create(
@@ -158,7 +162,7 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
         self.assertTrue(mock_run_character_sync.delay.called)
         self.assertTrue(
             SyncedCharacter.objects.filter(manager=self.sync_manager)
-            .filter(character__character=self.character_4)
+            .filter(character_ownership__character=self.character_4)
             .exists()
         )
 
@@ -173,7 +177,7 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
         self.assertTrue(mock_run_character_sync.delay.called)
         self.assertTrue(
             SyncedCharacter.objects.filter(manager=self.sync_manager)
-            .filter(character__character=self.character_6)
+            .filter(character_ownership__character=self.character_6)
             .exists()
         )
 
@@ -187,7 +191,7 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
         self.assertFalse(mock_run_character_sync.delay.called)
         self.assertFalse(
             SyncedCharacter.objects.filter(manager=self.sync_manager)
-            .filter(character__character=self.character_5)
+            .filter(character_ownership__character=self.character_5)
             .exists()
         )
 
@@ -201,7 +205,7 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
         self.assertFalse(mock_run_character_sync.delay.called)
         self.assertFalse(
             SyncedCharacter.objects.filter(manager=self.sync_manager)
-            .filter(character__character=self.character_3)
+            .filter(character_ownership__character=self.character_3)
             .exists()
         )
 
@@ -242,7 +246,9 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
         )
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            alliance=cls.alliance_1,
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
         for contact in ESI_CONTACTS:
             AllianceContact.objects.create(
@@ -292,22 +298,22 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
         self.assertTrue(mock_run_manager_sync.delay.called)
         self.assertTrue(
             SyncManager.objects.filter(alliance=self.alliance_1)
-            .filter(character__character=self.character_1)
+            .filter(character_ownership__character=self.character_1)
             .exists()
         )
 
     """
     def test_user_wo_permission_can_not_add_alliance_manager(
         self, mock_messages_plus, mock_run_manager_sync
-    ):               
+    ):
         response = self.make_request(self.user_2, self.character_2)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('standingssync:index'))        
+        self.assertEqual(response.url, reverse('standingssync:index'))
         self.assertFalse(mock_run_manager_sync.delay.called)
         self.assertFalse(
-            SyncManager.objects            
+            SyncManager.objects
             .filter(alliance=self.alliance_1)
-            .filter(character__character=self.character_2)
+            .filter(character_ownership__character=self.character_2)
             .exists()
         )
     """
@@ -322,7 +328,7 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
         self.assertFalse(mock_run_manager_sync.delay.called)
         self.assertFalse(
             SyncManager.objects.filter(alliance=self.alliance_1)
-            .filter(character__character=self.character_5)
+            .filter(character_ownership__character=self.character_5)
             .exists()
         )
 
@@ -336,6 +342,6 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
         self.assertFalse(mock_run_manager_sync.delay.called)
         self.assertFalse(
             SyncManager.objects.filter(alliance=self.alliance_1)
-            .filter(character__character=self.character_3)
+            .filter(character_ownership__character=self.character_3)
             .exists()
         )

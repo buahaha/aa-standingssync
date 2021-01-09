@@ -26,7 +26,9 @@ class TestAllianceContactManager(LoadTestDataMixin, TestCase):
 
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            alliance=cls.alliance_1,
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
         for contact in ESI_CONTACTS:
             AllianceContact.objects.create(
@@ -38,7 +40,7 @@ class TestAllianceContactManager(LoadTestDataMixin, TestCase):
 
         # sync char
         cls.synced_character = SyncedCharacter.objects.create(
-            character=cls.alt_ownership, manager=cls.sync_manager
+            character_ownership=cls.alt_ownership, manager=cls.sync_manager
         )
 
     def test_grouped_by_standing(self):

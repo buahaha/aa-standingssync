@@ -33,24 +33,24 @@ def index(request):
         except SyncManager.DoesNotExist:
             sync_manager = None
 
-    # get list of synced characters for this user
+    # get list of synced synced_characters for this user
     characters_query = SyncedCharacter.objects.select_related(
-        "character__character"
-    ).filter(character__user=request.user)
-    characters = [
+        "character_ownership__character"
+    ).filter(character_ownership__user=request.user)
+    synced_characters = [
         {
-            "portrait_url": character.character.character.portrait_url,
-            "name": character.character.character.character_name,
-            "status_message": character.get_status_message(),
-            "has_error": character.last_error != SyncedCharacter.ERROR_NONE,
-            "pk": character.pk,
+            "portrait_url": synced_character.character_ownership.character.portrait_url,
+            "name": synced_character.character_ownership.character.character_name,
+            "status_message": synced_character.get_status_message(),
+            "has_error": synced_character.last_error != SyncedCharacter.ERROR_NONE,
+            "pk": synced_character.pk,
         }
-        for character in characters_query
+        for synced_character in characters_query
     ]
     context = {
         "app_title": __title__,
-        "characters": characters,
-        "has_synced_chars": len(characters) > 0,
+        "synced_characters": synced_characters,
+        "has_synced_chars": len(synced_characters) > 0,
     }
     if sync_manager is not None:
         context["alliance"] = sync_manager.alliance
@@ -71,7 +71,7 @@ def add_alliance_manager(request, token):
     """add or update sync manager for an alliance"""
     success = True
     token_char = EveCharacter.objects.get(character_id=token.character_id)
-    owned_char = None
+    character_ownership = None
     alliance = None
 
     if not token_char.alliance_id:
@@ -86,7 +86,7 @@ def add_alliance_manager(request, token):
 
     if success:
         try:
-            owned_char = CharacterOwnership.objects.get(
+            character_ownership = CharacterOwnership.objects.get(
                 user=request.user, character=token_char
             )
         except CharacterOwnership.DoesNotExist:
@@ -104,7 +104,7 @@ def add_alliance_manager(request, token):
 
     if success:
         sync_manager, _ = SyncManager.objects.update_or_create(
-            alliance=alliance, defaults={"character": owned_char}
+            alliance=alliance, defaults={"character_ownership": character_ownership}
         )
         tasks.run_manager_sync.delay(
             manager_pk=sync_manager.pk, user_pk=request.user.pk
@@ -114,7 +114,8 @@ def add_alliance_manager(request, token):
             "{} set as alliance character for {}. "
             "Started syncing of alliance contacts. "
             "You will receive a report once it is completed.".format(
-                sync_manager.character.character.character_name, alliance.alliance_name
+                sync_manager.character_ownership.character.character_name,
+                alliance.alliance_name,
             ),
         )
     return redirect("standingssync:index")
@@ -138,7 +139,7 @@ def add_character(request, token):
         raise RuntimeError("can not find sync manager for alliance")
 
     token_char = EveCharacter.objects.get(character_id=token.character_id)
-    if token_char.alliance_id == sync_manager.character.character.alliance_id:
+    if token_char.alliance_id == sync_manager.character_ownership.character.alliance_id:
         messages_plus.warning(
             request,
             "Adding alliance members does not make much sense, "
@@ -147,7 +148,7 @@ def add_character(request, token):
 
     else:
         try:
-            owned_char = CharacterOwnership.objects.get(
+            character_ownership = CharacterOwnership.objects.get(
                 user=request.user, character=token_char
             )
         except CharacterOwnership.DoesNotExist:
@@ -155,7 +156,9 @@ def add_character(request, token):
                 request, "Could not find character {}".format(token_char.character_name)
             )
         else:
-            eff_standing = sync_manager.get_effective_standing(owned_char.character)
+            eff_standing = sync_manager.get_effective_standing(
+                character_ownership.character
+            )
             if eff_standing < STANDINGSSYNC_CHAR_MIN_STANDING:
                 messages_plus.warning(
                     request,
@@ -169,7 +172,8 @@ def add_character(request, token):
                 )
             else:
                 sync_character, _ = SyncedCharacter.objects.update_or_create(
-                    character=owned_char, defaults={"manager": sync_manager}
+                    character_ownership=character_ownership,
+                    defaults={"manager": sync_manager},
                 )
                 tasks.run_character_sync.delay(sync_character.pk)
                 messages_plus.success(
@@ -183,7 +187,7 @@ def add_character(request, token):
 def remove_character(request, alt_pk):
     """remove character from receiving alliance contacts"""
     alt = SyncedCharacter.objects.get(pk=alt_pk)
-    alt_name = alt.character.character.character_name
+    alt_name = alt.character_ownership.character.character_name
     alt.delete()
     messages_plus.success(request, "Sync deactivated for {}".format(alt_name))
     return redirect("standingssync:index")

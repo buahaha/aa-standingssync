@@ -17,7 +17,7 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
         "last_error",
         "version_hash",
         "last_sync",
-        "character__user",
+        "character_ownership__user",
         "manager",
     )
     actions = ["start_sync_contacts"]

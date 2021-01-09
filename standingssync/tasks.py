@@ -53,7 +53,7 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             "Requested character with pk {} does not exist".format(sync_char_pk)
         )
     addTag = make_logger_prefix(synced_character)
-    user = synced_character.character.user
+    user = synced_character.character_ownership.user
     issue_title = "Standings Sync deactivated for {}".format(synced_character)
 
     # abort if owner does not have sufficient permissions
@@ -82,8 +82,8 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
         try:
             token = (
                 Token.objects.filter(
-                    user=synced_character.character.user,
-                    character_id=synced_character.character.character.character_id,
+                    user=synced_character.character_ownership.user,
+                    character_id=synced_character.character_ownership.character.character_id,
                 )
                 .require_scopes(SyncedCharacter.get_esi_scopes())
                 .require_valid()
@@ -111,7 +111,7 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             return False
 
         character_eff_standing = manager.get_effective_standing(
-            synced_character.character.character
+            synced_character.character_ownership.character
         )
         if character_eff_standing < STANDINGSSYNC_CHAR_MIN_STANDING:
             logger.info(
@@ -150,7 +150,7 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
 
 def _perform_contacts_sync_for_character(synced_character, token, addTag):
     logger.info(addTag("Updating contacts with new version"))
-    character_id = synced_character.character.character.character_id
+    character_id = synced_character.character_ownership.character.character_id
     # get current contacts
     character_contacts = esi.client.Contacts.get_characters_character_id_contacts(
         token=token.valid_access_token(), character_id=character_id
@@ -212,13 +212,15 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
 
     addTag = make_logger_prefix(sync_manager)
     try:
-        if sync_manager.character is None:
+        if sync_manager.character_ownership is None:
             logger.error(addTag("No character configured to sync the alliance"))
             sync_manager.set_sync_status(SyncManager.ERROR_NO_CHARACTER)
             raise ValueError()
 
         # abort if character does not have sufficient permissions
-        if not sync_manager.character.user.has_perm("standingssync.add_syncmanager"):
+        if not sync_manager.character_ownership.user.has_perm(
+            "standingssync.add_syncmanager"
+        ):
             logger.error(
                 addTag(
                     "Character does not have sufficient permission "
@@ -232,8 +234,8 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
             # get token
             token = (
                 Token.objects.filter(
-                    user=sync_manager.character.user,
-                    character_id=sync_manager.character.character.character_id,
+                    user=sync_manager.character_ownership.user,
+                    character_id=sync_manager.character_ownership.character.character_id,
                 )
                 .require_scopes(SyncManager.get_esi_scopes())
                 .require_valid()
@@ -306,7 +308,7 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
 
 def _perform_contacts_sync_for_manager(sync_manager, token, addTag, force_sync):
     # get alliance contacts
-    alliance_id = int(sync_manager.character.character.alliance_id)
+    alliance_id = int(sync_manager.character_ownership.character.alliance_id)
     contacts = esi.client.Contacts.get_alliances_alliance_id_contacts(
         token=token.valid_access_token(), alliance_id=alliance_id
     ).results()

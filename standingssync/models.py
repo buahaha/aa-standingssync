@@ -34,10 +34,10 @@ class SyncManager(models.Model):
     ]
 
     alliance = models.OneToOneField(
-        EveAllianceInfo, on_delete=models.CASCADE, primary_key=True
+        EveAllianceInfo, on_delete=models.CASCADE, primary_key=True, related_name="+"
     )
     # alliance contacts are fetched from this character
-    character = models.OneToOneField(
+    character_ownership = models.OneToOneField(
         CharacterOwnership, on_delete=models.SET_NULL, null=True, default=None
     )
     version_hash = models.CharField(max_length=32, null=True, default=None)
@@ -45,8 +45,8 @@ class SyncManager(models.Model):
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
 
     def __str__(self):
-        if self.character is not None:
-            character_name = self.character.character.character_name
+        if self.character_ownership is not None:
+            character_name = self.character_ownership.character.character_name
         else:
             character_name = "None"
         return "{} ({})".format(self.alliance.alliance_name, character_name)
@@ -102,7 +102,7 @@ class SyncedCharacter(models.Model):
         (ERROR_UNKNOWN, "Unknown error"),
     ]
 
-    character = models.OneToOneField(
+    character_ownership = models.OneToOneField(
         CharacterOwnership, on_delete=models.CASCADE, primary_key=True
     )
     manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
@@ -111,7 +111,7 @@ class SyncedCharacter(models.Model):
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
 
     def __str__(self):
-        return self.character.character.character_name
+        return self.character_ownership.character.character_name
 
     def set_sync_status(self, status):
         """sets the sync status with the current date and time"""

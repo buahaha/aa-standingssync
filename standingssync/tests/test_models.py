@@ -24,7 +24,7 @@ class TestGetEffectiveStanding(LoadTestDataMixin, TestCase):
         )
 
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1
+            alliance=cls.alliance_1, character_ownership=cls.main_ownership_1
         )
         contacts = [
             {"contact_id": 101, "contact_type": "character", "standing": -10},
@@ -121,7 +121,7 @@ class TestSyncManager(LoadTestDataMixin, TestCase):
         )
 
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1
+            alliance=cls.alliance_1, character_ownership=cls.main_ownership_1
         )
         contacts = [
             {"contact_id": 101, "contact_type": "character", "standing": -10},
@@ -163,12 +163,14 @@ class TestSyncCharacter(LoadTestDataMixin, TestCase):
 
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            alliance=cls.alliance_1,
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
 
         # sync char
         cls.synced_character = SyncedCharacter.objects.create(
-            character=cls.alt_ownership, manager=cls.sync_manager
+            character_ownership=cls.alt_ownership, manager=cls.sync_manager
         )
 
     def test_get_last_error_message_after_sync(self):

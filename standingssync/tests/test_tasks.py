@@ -35,7 +35,9 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
 
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
-            alliance=cls.alliance_1, character=cls.main_ownership_1, version_hash="new"
+            alliance=cls.alliance_1,
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
         )
         for contact in ESI_CONTACTS:
             AllianceContact.objects.create(
@@ -47,10 +49,10 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
 
         # sync char
         cls.synced_character_2 = SyncedCharacter.objects.create(
-            character=alt_ownership_2, manager=cls.sync_manager
+            character_ownership=alt_ownership_2, manager=cls.sync_manager
         )
         cls.synced_character_3 = SyncedCharacter.objects.create(
-            character=alt_ownership_3, manager=cls.sync_manager
+            character_ownership=alt_ownership_3, manager=cls.sync_manager
         )
 
     def test_run_character_sync_wrong_pk(self):
@@ -126,7 +128,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         self._run_sync(mock_esi, mock_Token, self.synced_character_3)
 
     def _run_sync(self, mock_esi, mock_Token, synced_character):
-        character_id = int(synced_character.character.character.character_id)
+        character_id = int(synced_character.character_ownership.character.character_id)
         characters_contacts = {character_id: dict()}
 
         def esi_get_characters_character_id_contacts(*args, **kwargs):
@@ -208,7 +210,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     # run without char
     def test_abort_when_insufficient_permission(self):
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_2
+            alliance=self.alliance_1, character_ownership=self.main_ownership_2
         )
         self.assertFalse(
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_2.pk)
@@ -225,7 +227,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         )
 
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
         )
         self.assertFalse(
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
@@ -250,10 +252,10 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             spec=Token
         )
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
         )
         SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=sync_manager
+            character_ownership=self.alt_ownership, manager=sync_manager
         )
 
         # run manager sync
@@ -279,14 +281,16 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
 
         # create 1st sync manager
         SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
         )
         # create 2nd sync manager
         self.user_3 = create_test_user(self.character_3)
         main_ownership2 = CharacterOwnership.objects.get(
             character=self.character_3, user=self.user_3
         )
-        SyncManager.objects.create(alliance=self.alliance_3, character=main_ownership2)
+        SyncManager.objects.create(
+            alliance=self.alliance_3, character_ownership=main_ownership2
+        )
         # run regular sync
         tasks.run_regular_sync()
 
@@ -298,10 +302,10 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     def test_run_sync_expired_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
         )
         SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=sync_manager
+            character_ownership=self.alt_ownership, manager=sync_manager
         )
 
         # run manager sync
@@ -315,10 +319,10 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
     def test_run_sync_invalid_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()
         sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character=self.main_ownership_1
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
         )
         SyncedCharacter.objects.create(
-            character=self.alt_ownership, manager=sync_manager
+            character_ownership=self.alt_ownership, manager=sync_manager
         )
 
         # run manager sync
