@@ -7,39 +7,89 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('standingssync', '0002_refactoring'),
+        ("standingssync", "0002_refactoring"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='EveEntity',
+            name="EveEntity",
             fields=[
-                ('id', models.PositiveIntegerField(primary_key=True, serialize=False)),
-                ('category', models.CharField(choices=[('AL', 'alliance'), ('CO', 'corporation'), ('CH', 'character')], db_index=True, max_length=2)),
+                ("id", models.PositiveIntegerField(primary_key=True, serialize=False)),
+                (
+                    "category",
+                    models.CharField(
+                        choices=[
+                            ("AL", "alliance"),
+                            ("CO", "corporation"),
+                            ("CH", "character"),
+                        ],
+                        db_index=True,
+                        max_length=2,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='EveWarProtagonist',
+            name="EveWarProtagonist",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('isk_destroyed', models.FloatField()),
-                ('ships_killed', models.PositiveIntegerField()),
-                ('eve_entity', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='standingssync.eveentity')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("isk_destroyed", models.FloatField()),
+                ("ships_killed", models.PositiveIntegerField()),
+                (
+                    "eve_entity",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="standingssync.eveentity",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='EveWar',
+            name="EveWar",
             fields=[
-                ('id', models.PositiveIntegerField(primary_key=True, serialize=False)),
-                ('declared', models.DateTimeField()),
-                ('finished', models.DateTimeField(db_index=True, default=None, null=True)),
-                ('is_mutual', models.BooleanField()),
-                ('is_open_for_allies', models.BooleanField()),
-                ('retracted', models.DateTimeField(default=None, null=True)),
-                ('started', models.DateTimeField(db_index=True, default=None, null=True)),
-                ('aggressor', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='aggressor_war', to='standingssync.evewarprotagonist')),
-                ('allies', models.ManyToManyField(related_name='ally', to='standingssync.EveEntity')),
-                ('defender', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='defender_war', to='standingssync.evewarprotagonist')),
+                ("id", models.PositiveIntegerField(primary_key=True, serialize=False)),
+                ("declared", models.DateTimeField()),
+                (
+                    "finished",
+                    models.DateTimeField(db_index=True, default=None, null=True),
+                ),
+                ("is_mutual", models.BooleanField()),
+                ("is_open_for_allies", models.BooleanField()),
+                ("retracted", models.DateTimeField(default=None, null=True)),
+                (
+                    "started",
+                    models.DateTimeField(db_index=True, default=None, null=True),
+                ),
+                (
+                    "aggressor",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="aggressor_war",
+                        to="standingssync.evewarprotagonist",
+                    ),
+                ),
+                (
+                    "allies",
+                    models.ManyToManyField(
+                        related_name="ally", to="standingssync.EveEntity"
+                    ),
+                ),
+                (
+                    "defender",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="defender_war",
+                        to="standingssync.evewarprotagonist",
+                    ),
+                ),
             ],
         ),
     ]

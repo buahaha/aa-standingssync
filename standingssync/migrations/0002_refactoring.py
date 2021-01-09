@@ -7,39 +7,45 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('eveonline', '0012_index_additions'),
-        ('standingssync', '0001_initial-new'),
+        ("eveonline", "0012_index_additions"),
+        ("standingssync", "0001_initial-new"),
     ]
 
     operations = [
         migrations.RenameField(
-            model_name='syncedcharacter',
-            old_name='character',
-            new_name='character_ownership',
+            model_name="syncedcharacter",
+            old_name="character",
+            new_name="character_ownership",
         ),
         migrations.RenameField(
-            model_name='syncmanager',
-            old_name='character',
-            new_name='character_ownership',
+            model_name="syncmanager",
+            old_name="character",
+            new_name="character_ownership",
         ),
         migrations.AlterField(
-            model_name='alliancecontact',
-            name='contact_id',
+            model_name="alliancecontact",
+            name="contact_id",
             field=models.PositiveIntegerField(db_index=True),
         ),
         migrations.AlterField(
-            model_name='syncedcharacter',
-            name='version_hash',
-            field=models.CharField(default='', max_length=32),
+            model_name="syncedcharacter",
+            name="version_hash",
+            field=models.CharField(default="", max_length=32),
         ),
         migrations.AlterField(
-            model_name='syncmanager',
-            name='alliance',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='+', serialize=False, to='eveonline.eveallianceinfo'),
+            model_name="syncmanager",
+            name="alliance",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                primary_key=True,
+                related_name="+",
+                serialize=False,
+                to="eveonline.eveallianceinfo",
+            ),
         ),
         migrations.AlterField(
-            model_name='syncmanager',
-            name='version_hash',
-            field=models.CharField(default='', max_length=32),
+            model_name="syncmanager",
+            name="version_hash",
+            field=models.CharField(default="", max_length=32),
         ),
     ]
