@@ -40,7 +40,7 @@ class SyncManager(models.Model):
     character_ownership = models.OneToOneField(
         CharacterOwnership, on_delete=models.SET_NULL, null=True, default=None
     )
-    version_hash = models.CharField(max_length=32, null=True, default=None)
+    version_hash = models.CharField(max_length=32, default="")
     last_sync = models.DateTimeField(null=True, default=None)
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
 
@@ -106,7 +106,7 @@ class SyncedCharacter(models.Model):
         CharacterOwnership, on_delete=models.CASCADE, primary_key=True
     )
     manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
-    version_hash = models.CharField(max_length=32, null=True, default=None)
+    version_hash = models.CharField(max_length=32, default="")
     last_sync = models.DateTimeField(null=True, default=None)
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
 
@@ -138,7 +138,7 @@ class AllianceContact(models.Model):
     """An alliance contact with standing"""
 
     manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
-    contact_id = models.IntegerField()
+    contact_id = models.PositiveIntegerField(db_index=True)
     contact_type = models.CharField(max_length=32)
     standing = models.FloatField()
 
