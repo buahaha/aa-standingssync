@@ -13,12 +13,11 @@ from esi.models import Token
 
 from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS
 from ..models import SyncManager, SyncedCharacter, AllianceContact
-from ..utils import set_test_logger, NoSocketsTestCase
+from ..utils import NoSocketsTestCase
 from .. import views
 
 
 MODULE_PATH = "standingssync.views"
-logger = set_test_logger(MODULE_PATH, __file__)
 
 
 class TestMainScreen(LoadTestDataMixin, NoSocketsTestCase):

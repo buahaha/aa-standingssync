@@ -14,7 +14,12 @@ from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
 from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
-from .models import SyncManager, SyncedCharacter, AllianceContact
+from .models import (
+    SyncManager,
+    SyncedCharacter,
+    AllianceContact,
+    EveWar,
+)
 from .providers import esi
 from .utils import LoggerAddTag, make_logger_prefix, chunks
 
@@ -345,3 +350,19 @@ def run_regular_sync():
     """syncs all managers and related characters if needed"""
     for sync_manager_pk in SyncManager.objects.values_list("pk", flat=True):
         run_manager_sync.delay(sync_manager_pk)
+
+
+@shared_task
+def update_all_wars():
+    logger.info("Removing outdated wars")
+    EveWar.objects.delete_outdated()
+    logger.info("Retrieving wars from ESI")
+    war_ids = esi.client.Wars.get_wars().results()
+    logger.info("Retrieved %s wars from ESI", len(war_ids))
+    for war_id in war_ids:
+        update_war.delay(war_id)
+
+
+@shared_task
+def update_war(war_id: int):
+    EveWar.objects.update_from_esi(war_id)

@@ -9,11 +9,10 @@ from esi.errors import TokenExpiredError, TokenInvalidError
 from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
 from .. import tasks
 from ..models import SyncManager, SyncedCharacter, AllianceContact
-from ..utils import set_test_logger, NoSocketsTestCase, generate_invalid_pk
+from ..utils import NoSocketsTestCase, generate_invalid_pk
 
 
 MODULE_PATH = "standingssync.tasks"
-logger = set_test_logger(MODULE_PATH, __file__)
 
 
 class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):

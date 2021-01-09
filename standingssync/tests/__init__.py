@@ -9,6 +9,7 @@ from allianceauth.eveonline.models import (
     EveAllianceInfo,
 )
 from allianceauth.tests.auth_utils import AuthUtils
+from ..models import EveEntity
 
 
 class BravadoOperationStub:
@@ -59,6 +60,31 @@ ESI_CONTACTS = [
 ]
 
 ESI_CONTACTS_BY_ID = {int(x["contact_id"]): x for x in ESI_CONTACTS}
+
+
+def create_eve_entities():
+    for obj in EveAllianceInfo.objects.all():
+        EveEntity.objects.create(
+            id=obj.alliance_id, category=EveEntity.Category.ALLIANCE
+        )
+    for obj in EveCorporationInfo.objects.all():
+        EveEntity.objects.create(
+            id=obj.corporation_id, category=EveEntity.Category.CORPORATION
+        )
+    for obj in EveCharacter.objects.all():
+        EveEntity.objects.create(
+            id=obj.character_id, category=EveEntity.Category.CHARACTER
+        )
+    map_to_category = {
+        "alliance": EveEntity.Category.ALLIANCE,
+        "corporation": EveEntity.Category.CORPORATION,
+        "character": EveEntity.Category.CHARACTER,
+    }
+    for info in ESI_CONTACTS:
+        EveEntity.objects.get_or_create(
+            id=info["contact_id"],
+            defaults={"category": map_to_category[info["contact_type"]]},
+        )
 
 
 def add_main_to_user(user: User, character: EveCharacter):
@@ -151,3 +177,4 @@ class LoadTestDataMixin:
             corporation_id=2005,
             corporation_name="Daily Bugle",
         )
+        create_eve_entities()

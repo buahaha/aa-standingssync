@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 
 from allianceauth.authentication.models import CharacterOwnership
@@ -6,7 +7,12 @@ from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
 from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
-from .managers import AllianceContactManager
+from .managers import (
+    AllianceContactManager,
+    EveEntityManager,
+    EveWarManager,
+    EveWarProtagonistManager,
+)
 from .utils import LoggerAddTag
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -153,3 +159,55 @@ class AllianceContact(models.Model):
                 fields=["manager", "contact_id"], name="manager-contacts-unq"
             )
         ]
+
+
+class EveEntity(models.Model):
+    class Category(models.TextChoices):
+        ALLIANCE = "AL", _("alliance")
+        CORPORATION = "CO", _("corporation")
+        CHARACTER = "CH", _("character")
+
+    id = models.PositiveIntegerField(primary_key=True)
+    category = models.CharField(max_length=2, choices=Category.choices, db_index=True)
+
+    objects = EveEntityManager()
+
+    def __str__(self) -> str:
+        return f"{self.id}-{self.category}"
+
+
+class EveWarProtagonist(models.Model):
+    """A attacker or defender in a war"""
+
+    eve_entity = models.ForeignKey(EveEntity, on_delete=models.CASCADE)
+    isk_destroyed = models.FloatField()
+    ships_killed = models.PositiveIntegerField()
+
+    objects = EveWarProtagonistManager()
+
+    def __str__(self) -> str:
+        return str(self.eve_entity)
+
+
+class EveWar(models.Model):
+    """An EveOnline war"""
+
+    id = models.PositiveIntegerField(primary_key=True)
+    aggressor = models.OneToOneField(
+        EveWarProtagonist, on_delete=models.CASCADE, related_name="aggressor_war"
+    )
+    allies = models.ManyToManyField(EveEntity, related_name="ally")
+    declared = models.DateTimeField()
+    defender = models.OneToOneField(
+        EveWarProtagonist, on_delete=models.CASCADE, related_name="defender_war"
+    )
+    finished = models.DateTimeField(null=True, default=None, db_index=True)
+    is_mutual = models.BooleanField()
+    is_open_for_allies = models.BooleanField()
+    retracted = models.DateTimeField(null=True, default=None)
+    started = models.DateTimeField(null=True, default=None, db_index=True)
+
+    objects = EveWarManager()
+
+    def __str__(self) -> str:
+        return f"{self.id}: {self.aggressor} vs. {self.defender}"

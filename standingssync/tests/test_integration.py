@@ -6,11 +6,9 @@ from allianceauth.tests.auth_utils import AuthUtils
 from django_webtest import WebTest
 
 from . import create_test_user, LoadTestDataMixin
-from ..utils import set_test_logger
 
 
 MODULE_PATH = "standingssync.views"
-logger = set_test_logger(MODULE_PATH, __file__)
 
 
 class TestNotSetup(LoadTestDataMixin, WebTest):
