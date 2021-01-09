@@ -12,7 +12,8 @@ from ..models import SyncManager, SyncedCharacter, AllianceContact
 from ..utils import NoSocketsTestCase, generate_invalid_pk
 
 
-MODULE_PATH = "standingssync.tasks"
+TASKS_PATH = "standingssync.tasks"
+MODELS_PATH = "standingssync.models"
 
 
 class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
@@ -66,7 +67,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
-    @patch(MODULE_PATH + ".Token")
+    @patch(TASKS_PATH + ".Token")
     def test_delete_sync_character_if_token_invalid(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()
         AuthUtils.add_permission_to_user_by_name(
@@ -77,7 +78,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
-    @patch(MODULE_PATH + ".Token")
+    @patch(TASKS_PATH + ".Token")
     def test_delete_sync_character_if_token_expired(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()
         AuthUtils.add_permission_to_user_by_name(
@@ -88,8 +89,8 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
-    @patch(MODULE_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
-    @patch(MODULE_PATH + ".Token")
+    @patch(TASKS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
+    @patch(TASKS_PATH + ".Token")
     def test_delete_sync_character_if_no_longer_blue(self, mock_Token):
         mock_Token.objects.filter.return_value = Mock()
         AuthUtils.add_permission_to_user_by_name(
@@ -112,16 +113,16 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         contact.standing = 10
         contact.save()
 
-    @patch(MODULE_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
-    @patch(MODULE_PATH + ".Token")
-    @patch(MODULE_PATH + ".esi")
+    @patch(TASKS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
+    @patch(TASKS_PATH + ".Token")
+    @patch(TASKS_PATH + ".esi")
     def test_normal_sync_1(self, mock_esi, mock_Token):
         """run normal sync for a character which has blue standing"""
         self._run_sync(mock_esi, mock_Token, self.synced_character_2)
 
-    @patch(MODULE_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
-    @patch(MODULE_PATH + ".Token")
-    @patch(MODULE_PATH + ".esi")
+    @patch(TASKS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
+    @patch(TASKS_PATH + ".Token")
+    @patch(TASKS_PATH + ".esi")
     def test_normal_sync_2(self, mock_esi, mock_Token):
         """run normal sync for a character which has no standing and allow neutrals"""
         self._run_sync(mock_esi, mock_Token, self.synced_character_3)
@@ -219,7 +220,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             sync_manager.last_error, SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
         )
 
-    @patch(MODULE_PATH + ".Token")
+    @patch(TASKS_PATH + ".Token")
     def test_run_sync_error_on_no_token(self, mock_Token):
         mock_Token.objects.filter.return_value.require_scopes.return_value.require_valid.return_value.first.return_value = (
             None
@@ -235,9 +236,9 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         self.assertEqual(sync_manager.last_error, SyncManager.ERROR_TOKEN_INVALID)
 
     # normal synch of new contacts
-    @patch(MODULE_PATH + ".Token")
-    @patch(MODULE_PATH + ".run_character_sync")
-    @patch(MODULE_PATH + ".esi")
+    @patch(MODELS_PATH + ".Token")
+    @patch(TASKS_PATH + ".run_character_sync")
+    @patch(MODELS_PATH + ".esi")
     def test_run_sync_normal(self, mock_esi, mock_run_character_sync, mock_Token):
         def esi_get_alliances_alliance_id_contacts(*args, **kwargs):
             return BravadoOperationStub(ESI_CONTACTS)
@@ -273,7 +274,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         self.assertSetEqual(base_contact_ids, alliance_contact_ids)
 
     # normal synch of new contacts
-    @patch(MODULE_PATH + ".run_manager_sync")
+    @patch(TASKS_PATH + ".run_manager_sync")
     def test_run_sync_all(self, mock_run_manager_sync):
         # create mocks
         mock_run_manager_sync.delay = Mock()
@@ -297,7 +298,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         self.assertEqual(mock_run_manager_sync.delay.call_count, 2)
 
     # test expired token
-    @patch(MODULE_PATH + ".Token")
+    @patch(MODELS_PATH + ".Token")
     def test_run_sync_expired_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()
         sync_manager = SyncManager.objects.create(
@@ -314,7 +315,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         self.assertEqual(sync_manager.last_error, SyncManager.ERROR_TOKEN_EXPIRED)
 
     # test invalid token
-    @patch(MODULE_PATH + ".Token")
+    @patch(MODELS_PATH + ".Token")
     def test_run_sync_invalid_token(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()
         sync_manager = SyncManager.objects.create(

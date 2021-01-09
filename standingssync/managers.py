@@ -120,3 +120,7 @@ class EveWarProtagonistManager(models.Manager):
             isk_destroyed=info.get("isk_destroyed"),
             ships_killed=info.get("ships_killed"),
         )
+
+
+class SyncManagerManager(models.Manager):
+    pass

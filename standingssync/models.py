@@ -1,6 +1,12 @@
-from django.db import models
+import hashlib
+import json
+
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
+
+from esi.models import Token
+from esi.errors import TokenExpiredError, TokenInvalidError
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
@@ -12,7 +18,9 @@ from .managers import (
     EveEntityManager,
     EveWarManager,
     EveWarProtagonistManager,
+    SyncManagerManager,
 )
+from .providers import esi
 from .utils import LoggerAddTag
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -50,6 +58,8 @@ class SyncManager(models.Model):
     last_sync = models.DateTimeField(null=True, default=None)
     last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
 
+    objects = SyncManagerManager()
+
     def __str__(self):
         if self.character_ownership is not None:
             character_name = self.character_ownership.character.character_name
@@ -83,6 +93,99 @@ class SyncManager(models.Model):
                         pass
 
         return contact_found.standing if contact_found is not None else 0.0
+
+    def update_from_esi(self, force_sync: bool = False):
+        """Update this sync manager from ESi"""
+        if self.character_ownership is None:
+            logger.error("%s: No character configured to sync the alliance", self)
+            self.set_sync_status(SyncManager.ERROR_NO_CHARACTER)
+            raise ValueError()
+
+        # abort if character does not have sufficient permissions
+        if not self.character_ownership.user.has_perm("standingssync.add_syncmanager"):
+            logger.error(
+                "%s: Character does not have sufficient permission "
+                "to sync the alliance",
+                self,
+            )
+            self.set_sync_status(SyncManager.ERROR_INSUFFICIENT_PERMISSIONS)
+            raise ValueError()
+
+        try:
+            # get token
+            token = (
+                Token.objects.filter(
+                    user=self.character_ownership.user,
+                    character_id=self.character_ownership.character.character_id,
+                )
+                .require_scopes(SyncManager.get_esi_scopes())
+                .require_valid()
+                .first()
+            )
+
+        except TokenInvalidError:
+            logger.error("%s: Invalid token for fetching alliance contacts", self)
+            self.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+            raise TokenInvalidError()
+
+        except TokenExpiredError:
+            self.set_sync_status(SyncManager.ERROR_TOKEN_EXPIRED)
+            raise TokenExpiredError()
+
+        else:
+            if not token:
+                self.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+                raise TokenInvalidError()
+
+        try:
+            new_version_hash = self._perform_update_from_esi(token, force_sync)
+            self.set_sync_status(SyncManager.ERROR_NONE)
+        except Exception as ex:
+            logger.error(
+                "%s An unexpected error ocurred while trying to sync alliance",
+                self,
+                exc_info=True,
+            )
+            self.set_sync_status(SyncManager.ERROR_UNKNOWN)
+            raise ex()
+
+        return new_version_hash
+
+    def _perform_update_from_esi(self, token, force_sync) -> str:
+        # get alliance contacts
+        alliance_id = self.character_ownership.character.alliance_id
+        contacts = esi.client.Contacts.get_alliances_alliance_id_contacts(
+            token=token.valid_access_token(), alliance_id=alliance_id
+        ).results()
+
+        # determine if contacts have changed by comparing their hashes
+        new_version_hash = hashlib.md5(json.dumps(contacts).encode("utf-8")).hexdigest()
+        if force_sync or new_version_hash != self.version_hash:
+            logger.info("%s: Storing alliance update with %s contacts", self, contacts)
+            contacts_unique = {int(c["contact_id"]): c for c in contacts}
+
+            # add the sync alliance with max standing to contacts
+            contacts_unique[alliance_id] = {
+                "contact_id": alliance_id,
+                "contact_type": "alliance",
+                "standing": 10,
+            }
+            with transaction.atomic():
+                AllianceContact.objects.filter(manager=self).delete()
+                # TODO: Change to bulk create
+                for contact_id, contact in contacts_unique.items():
+                    AllianceContact.objects.create(
+                        manager=self,
+                        contact_id=contact_id,
+                        contact_type=contact["contact_type"],
+                        standing=contact["standing"],
+                    )
+                self.version_hash = new_version_hash
+                self.save()
+        else:
+            logger.info("%s: Alliance contacts are unchanged.", self)
+
+        return new_version_hash
 
     @classmethod
     def get_esi_scopes(cls) -> list:
