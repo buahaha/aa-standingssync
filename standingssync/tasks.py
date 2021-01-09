@@ -23,7 +23,7 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 @shared_task
-def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
+def run_character_sync(sync_char_pk, force_sync=False):
     """syncs contacts for one character
 
     Will delete the sync character if necessary,
@@ -46,12 +46,7 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
             "once the issue has been resolved.".format(synced_character, message)
         )
 
-    try:
-        synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
-    except SyncedCharacter.DoesNotExist:
-        raise SyncedCharacter.DoesNotExist(
-            "Requested character with pk {} does not exist".format(sync_char_pk)
-        )
+    synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
     addTag = make_logger_prefix(synced_character)
     user = synced_character.character_ownership.user
     issue_title = "Standings Sync deactivated for {}".format(synced_character)
@@ -70,11 +65,7 @@ def run_character_sync(sync_char_pk, force_sync=False, manager_pk=None):
         return False
 
     # check if an update is needed
-    if manager_pk is None:
-        manager = synced_character.manager
-    else:
-        manager = SyncManager.objects.get(pk=manager_pk)
-
+    manager = synced_character.manager
     if not force_sync and manager.version_hash == synced_character.version_hash:
         logger.info(addTag("contacts of this char are up-to-date, no sync required"))
     else:
@@ -203,13 +194,7 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
         True on success or False on error
     """
 
-    try:
-        sync_manager = SyncManager.objects.get(pk=manager_pk)
-    except SyncManager.DoesNotExist:
-        raise SyncManager.DoesNotExist(
-            "task called for non existing manager with pk {}".format(manager_pk)
-        )
-
+    sync_manager = SyncManager.objects.get(pk=manager_pk)
     addTag = make_logger_prefix(sync_manager)
     try:
         if sync_manager.character_ownership is None:
@@ -271,6 +256,7 @@ def run_manager_sync(manager_pk, force_sync=False, user_pk=None):
             raise ex()
 
     except Exception:
+        logger.debug("Unexpected exception occurred", exc_info=True)
         success = False
     else:
         success = True
