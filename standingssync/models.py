@@ -10,9 +10,11 @@ from esi.errors import TokenExpiredError, TokenInvalidError
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
+from allianceauth.notifications import notify
 from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
+from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
 from .managers import (
     AllianceContactManager,
     EveEntityManager,
@@ -21,7 +23,7 @@ from .managers import (
     SyncManagerManager,
 )
 from .providers import esi
-from .utils import LoggerAddTag
+from .utils import LoggerAddTag, chunks
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
@@ -237,6 +239,134 @@ class SyncedCharacter(models.Model):
             message = "Not synced yet"
 
         return message
+
+    def update(self, force_sync: bool = False):
+        user = self.character_ownership.user
+        issue_title = f"Standings Sync deactivated for {self}"
+
+        # abort if owner does not have sufficient permissions
+        if not user.has_perm("standingssync.add_syncedcharacter"):
+            logger.info(
+                "%s: sync deactivated due to insufficient user permissions", self
+            )
+            notify(
+                user,
+                issue_title,
+                self._issue_message("you no longer have permission for this service"),
+            )
+            self.delete()
+            return False
+
+        # check if an update is needed
+        if not force_sync and self.manager.version_hash == self.version_hash:
+            logger.info(
+                "%s: contacts of this char are up-to-date, no sync required", self
+            )
+            return True
+
+        try:
+            token = (
+                Token.objects.filter(
+                    user=self.character_ownership.user,
+                    character_id=self.character_ownership.character.character_id,
+                )
+                .require_scopes(SyncedCharacter.get_esi_scopes())
+                .require_valid()
+                .first()
+            )
+        except TokenInvalidError:
+            logger.info("%s: sync deactivated due to invalid token", self)
+            notify(
+                user,
+                issue_title,
+                self._issue_message("your token is no longer valid"),
+            )
+            self.delete()
+            return False
+
+        except TokenExpiredError:
+            logger.info("%s: sync deactivated due to expired token", self)
+            notify(
+                user,
+                issue_title,
+                self._issue_message("your token has expired"),
+            )
+            self.delete()
+            return False
+
+        character_eff_standing = self.manager.get_effective_standing(
+            self.character_ownership.character
+        )
+        if character_eff_standing < STANDINGSSYNC_CHAR_MIN_STANDING:
+            logger.info(
+                "%s: sync deactivated because character is no longer considered blue. "
+                f"It's standing is: {character_eff_standing}, "
+                f"while STANDINGSSYNC_CHAR_MIN_STANDING is: {STANDINGSSYNC_CHAR_MIN_STANDING} ",
+                self,
+            )
+            notify(
+                user,
+                issue_title,
+                self._issue_message(
+                    "your character is no longer blue with the alliance. "
+                    f"The standing value is: {character_eff_standing:.1f} ",
+                ),
+            )
+            self.delete()
+            return False
+
+        if token is None:
+            self.set_sync_status(SyncedCharacter.ERROR_UNKNOWN)
+            raise RuntimeError("Can not find suitable token for synced char")
+
+        logger.info("%s: Updating contacts with new version", self)
+        character_id = self.character_ownership.character.character_id
+        # get current contacts
+        character_contacts = esi.client.Contacts.get_characters_character_id_contacts(
+            token=token.valid_access_token(), character_id=character_id
+        ).results()
+        # delete all current contacts
+        max_items = 20
+        contact_ids_chunks = chunks(
+            [x["contact_id"] for x in character_contacts], max_items
+        )
+        for contact_ids_chunk in contact_ids_chunks:
+            esi.client.Contacts.delete_characters_character_id_contacts(
+                token=token.valid_access_token(),
+                character_id=character_id,
+                contact_ids=contact_ids_chunk,
+            )
+
+        # write alliance contacts to ESI
+        contacts_by_standing = AllianceContact.objects.grouped_by_standing(
+            sync_manager=self.manager
+        )
+        max_items = 100
+        for standing in contacts_by_standing.keys():
+            contact_ids_chunks = chunks(
+                [c.contact_id for c in contacts_by_standing[standing]], max_items
+            )
+            for contact_ids_chunk in contact_ids_chunks:
+                esi.client.Contacts.post_characters_character_id_contacts(
+                    token=token.valid_access_token(),
+                    character_id=character_id,
+                    contact_ids=contact_ids_chunk,
+                    standing=standing,
+                )
+
+        # store updated version hash with character
+        self.version_hash = self.manager.version_hash
+        self.save()
+        self.set_sync_status(SyncedCharacter.ERROR_NONE)
+        return True
+
+    def _issue_message(self, message):
+        return (
+            "Standings Sync has been deactivated for your "
+            f"character {self}, because {message}.\n"
+            "Feel free to activate sync for your character again, "
+            "once the issue has been resolved."
+        )
 
     @staticmethod
     def get_esi_scopes() -> list:

@@ -67,7 +67,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
-    @patch(TASKS_PATH + ".Token")
+    @patch(MODELS_PATH + ".Token")
     def test_delete_sync_character_if_token_invalid(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()
         AuthUtils.add_permission_to_user_by_name(
@@ -78,7 +78,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
-    @patch(TASKS_PATH + ".Token")
+    @patch(MODELS_PATH + ".Token")
     def test_delete_sync_character_if_token_expired(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenExpiredError()
         AuthUtils.add_permission_to_user_by_name(
@@ -89,8 +89,8 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
-    @patch(TASKS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
-    @patch(TASKS_PATH + ".Token")
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
+    @patch(MODELS_PATH + ".Token")
     def test_delete_sync_character_if_no_longer_blue(self, mock_Token):
         mock_Token.objects.filter.return_value = Mock()
         AuthUtils.add_permission_to_user_by_name(
@@ -113,16 +113,16 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         contact.standing = 10
         contact.save()
 
-    @patch(TASKS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
-    @patch(TASKS_PATH + ".Token")
-    @patch(TASKS_PATH + ".esi")
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
+    @patch(MODELS_PATH + ".Token")
+    @patch(MODELS_PATH + ".esi")
     def test_normal_sync_1(self, mock_esi, mock_Token):
         """run normal sync for a character which has blue standing"""
         self._run_sync(mock_esi, mock_Token, self.synced_character_2)
 
-    @patch(TASKS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
-    @patch(TASKS_PATH + ".Token")
-    @patch(TASKS_PATH + ".esi")
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
+    @patch(MODELS_PATH + ".Token")
+    @patch(MODELS_PATH + ".esi")
     def test_normal_sync_2(self, mock_esi, mock_Token):
         """run normal sync for a character which has no standing and allow neutrals"""
         self._run_sync(mock_esi, mock_Token, self.synced_character_3)
@@ -220,7 +220,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             sync_manager.last_error, SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
         )
 
-    @patch(TASKS_PATH + ".Token")
+    @patch(MODELS_PATH + ".Token")
     def test_run_sync_error_on_no_token(self, mock_Token):
         mock_Token.objects.filter.return_value.require_scopes.return_value.require_valid.return_value.first.return_value = (
             None

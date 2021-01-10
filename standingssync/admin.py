@@ -25,7 +25,7 @@ class SyncedCharacterAdmin(admin.ModelAdmin):
     list_display_links = None
 
     def user(self, obj):
-        return obj.character.user
+        return obj.character_ownership.user
 
     def character_name(self, obj):
         return obj.__str__()
@@ -64,7 +64,7 @@ class SyncManagerAdmin(admin.ModelAdmin):
     actions = ["start_sync_managers"]
 
     def user(self, obj):
-        return obj.character.user if obj.character else None
+        return obj.character_ownership.user if obj.character_ownership else None
 
     def character_name(self, obj):
         return obj.__str__()
