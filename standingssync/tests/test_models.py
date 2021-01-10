@@ -147,13 +147,13 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
             )
 
     def test_set_sync_status(self):
-        self.sync_manager.last_error = SyncManager.ERROR_NONE
+        self.sync_manager.last_error = SyncManager.Error.NONE
         self.sync_manager.last_sync = None
 
-        self.sync_manager.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+        self.sync_manager.set_sync_status(SyncManager.Error.TOKEN_INVALID)
         self.sync_manager.refresh_from_db()
 
-        self.assertEqual(self.sync_manager.last_error, SyncManager.ERROR_TOKEN_INVALID)
+        self.assertEqual(self.sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
         self.assertIsNotNone(self.sync_manager.last_sync)
 
 
@@ -185,33 +185,33 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_get_last_error_message_after_sync(self):
         self.synced_character.last_sync = now()
-        self.synced_character.last_error = SyncedCharacter.ERROR_NONE
+        self.synced_character.last_error = SyncedCharacter.Error.NONE
         expected = "OK"
         self.assertEqual(self.synced_character.get_status_message(), expected)
 
-        self.synced_character.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
+        self.synced_character.last_error = SyncedCharacter.Error.TOKEN_EXPIRED
         expected = "Expired token"
         self.assertEqual(self.synced_character.get_status_message(), expected)
 
     def test_get_last_error_message_no_sync(self):
         self.synced_character.last_sync = None
-        self.synced_character.last_error = SyncedCharacter.ERROR_NONE
+        self.synced_character.last_error = SyncedCharacter.Error.NONE
         expected = "Not synced yet"
         self.assertEqual(self.synced_character.get_status_message(), expected)
 
-        self.synced_character.last_error = SyncedCharacter.ERROR_TOKEN_EXPIRED
+        self.synced_character.last_error = SyncedCharacter.Error.TOKEN_EXPIRED
         expected = "Expired token"
         self.assertEqual(self.synced_character.get_status_message(), expected)
 
     def test_set_sync_status(self):
-        self.synced_character.last_error = SyncManager.ERROR_NONE
+        self.synced_character.last_error = SyncManager.Error.NONE
         self.synced_character.last_sync = None
 
-        self.synced_character.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+        self.synced_character.set_sync_status(SyncManager.Error.TOKEN_INVALID)
         self.synced_character.refresh_from_db()
 
         self.assertEqual(
-            self.synced_character.last_error, SyncManager.ERROR_TOKEN_INVALID
+            self.synced_character.last_error, SyncManager.Error.TOKEN_INVALID
         )
         self.assertIsNotNone(self.synced_character.last_sync)
 

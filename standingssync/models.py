@@ -28,26 +28,33 @@ from .utils import LoggerAddTag, chunks
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-class SyncManager(models.Model):
+class _SyncBaseModel(models.Model):
+    """Base for sync models"""
+
+    version_hash = models.CharField(max_length=32, default="")
+    last_sync = models.DateTimeField(null=True, default=None)
+
+    class Meta:
+        abstract = True
+
+    def set_sync_status(self, status: int) -> None:
+        """sets the sync status with the current date and time"""
+        self.last_error = status
+        self.last_sync = now()
+        self.save()
+
+
+class SyncManager(_SyncBaseModel):
     """An object for managing syncing of contacts for an alliance"""
 
-    ERROR_NONE = 0
-    ERROR_TOKEN_INVALID = 1
-    ERROR_TOKEN_EXPIRED = 2
-    ERROR_INSUFFICIENT_PERMISSIONS = 3
-    ERROR_NO_CHARACTER = 4
-    ERROR_ESI_UNAVAILABLE = 5
-    ERROR_UNKNOWN = 99
-
-    ERRORS_LIST = [
-        (ERROR_NONE, "No error"),
-        (ERROR_TOKEN_INVALID, "Invalid token"),
-        (ERROR_TOKEN_EXPIRED, "Expired token"),
-        (ERROR_INSUFFICIENT_PERMISSIONS, "Insufficient permissions"),
-        (ERROR_NO_CHARACTER, "No character set for fetching alliance contacts"),
-        (ERROR_ESI_UNAVAILABLE, "ESI API is currently unavailable"),
-        (ERROR_UNKNOWN, "Unknown error"),
-    ]
+    class Error(models.IntegerChoices):
+        NONE = 0, "No error"
+        TOKEN_INVALID = 1, "Invalid token"
+        TOKEN_EXPIRED = 2, "Expired token"
+        INSUFFICIENT_PERMISSIONS = 3, "Insufficient permissions"
+        NO_CHARACTER = 4, "No character set for fetching alliance contacts"
+        ESI_UNAVAILABLE = 5, "ESI API is currently unavailable"
+        UNKNOWN = 99, "Unknown error"
 
     alliance = models.OneToOneField(
         EveAllianceInfo, on_delete=models.CASCADE, primary_key=True, related_name="+"
@@ -56,9 +63,7 @@ class SyncManager(models.Model):
     character_ownership = models.OneToOneField(
         CharacterOwnership, on_delete=models.SET_NULL, null=True, default=None
     )
-    version_hash = models.CharField(max_length=32, default="")
-    last_sync = models.DateTimeField(null=True, default=None)
-    last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
+    last_error = models.IntegerField(choices=Error.choices, default=Error.NONE)
 
     objects = SyncManagerManager()
 
@@ -68,12 +73,6 @@ class SyncManager(models.Model):
         else:
             character_name = "None"
         return "{} ({})".format(self.alliance.alliance_name, character_name)
-
-    def set_sync_status(self, status):
-        """sets the sync status with the current date and time"""
-        self.last_error = status
-        self.last_sync = now()
-        self.save()
 
     def get_effective_standing(self, character: EveCharacter) -> float:
         """return the effective standing with this alliance"""
@@ -96,11 +95,19 @@ class SyncManager(models.Model):
 
         return contact_found.standing if contact_found is not None else 0.0
 
-    def update_from_esi(self, force_sync: bool = False):
-        """Update this sync manager from ESi"""
+    def update_from_esi(self, force_sync: bool = False) -> bool:
+        """Update this sync manager from ESi
+
+        Args:
+        - force_sync: will ignore version_hash if set to true
+        - user_pk: user to send a completion report to (optional)
+
+        Returns:
+        - True on success or False on error
+        """
         if self.character_ownership is None:
             logger.error("%s: No character configured to sync the alliance", self)
-            self.set_sync_status(SyncManager.ERROR_NO_CHARACTER)
+            self.set_sync_status(self.Error.NO_CHARACTER)
             raise ValueError()
 
         # abort if character does not have sufficient permissions
@@ -110,7 +117,7 @@ class SyncManager(models.Model):
                 "to sync the alliance",
                 self,
             )
-            self.set_sync_status(SyncManager.ERROR_INSUFFICIENT_PERMISSIONS)
+            self.set_sync_status(self.Error.INSUFFICIENT_PERMISSIONS)
             raise ValueError()
 
         try:
@@ -120,35 +127,35 @@ class SyncManager(models.Model):
                     user=self.character_ownership.user,
                     character_id=self.character_ownership.character.character_id,
                 )
-                .require_scopes(SyncManager.get_esi_scopes())
+                .require_scopes(self.get_esi_scopes())
                 .require_valid()
                 .first()
             )
 
         except TokenInvalidError:
             logger.error("%s: Invalid token for fetching alliance contacts", self)
-            self.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+            self.set_sync_status(self.Error.TOKEN_INVALID)
             raise TokenInvalidError()
 
         except TokenExpiredError:
-            self.set_sync_status(SyncManager.ERROR_TOKEN_EXPIRED)
+            self.set_sync_status(self.Error.TOKEN_EXPIRED)
             raise TokenExpiredError()
 
         else:
             if not token:
-                self.set_sync_status(SyncManager.ERROR_TOKEN_INVALID)
+                self.set_sync_status(self.Error.TOKEN_INVALID)
                 raise TokenInvalidError()
 
         try:
             new_version_hash = self._perform_update_from_esi(token, force_sync)
-            self.set_sync_status(SyncManager.ERROR_NONE)
+            self.set_sync_status(self.Error.NONE)
         except Exception as ex:
             logger.error(
                 "%s An unexpected error ocurred while trying to sync alliance",
                 self,
                 exc_info=True,
             )
-            self.set_sync_status(SyncManager.ERROR_UNKNOWN)
+            self.set_sync_status(self.Error.UNKNOWN)
             raise ex()
 
         return new_version_hash
@@ -194,44 +201,28 @@ class SyncManager(models.Model):
         return ["esi-alliances.read_contacts.v1"]
 
 
-class SyncedCharacter(models.Model):
+class SyncedCharacter(_SyncBaseModel):
     """A character that has his personal contacts synced with an alliance"""
 
-    ERROR_NONE = 0
-    ERROR_TOKEN_INVALID = 1
-    ERROR_TOKEN_EXPIRED = 2
-    ERROR_INSUFFICIENT_PERMISSIONS = 3
-    ERROR_ESI_UNAVAILABLE = 5
-    ERROR_UNKNOWN = 99
-
-    ERRORS_LIST = [
-        (ERROR_NONE, "No error"),
-        (ERROR_TOKEN_INVALID, "Invalid token"),
-        (ERROR_TOKEN_EXPIRED, "Expired token"),
-        (ERROR_INSUFFICIENT_PERMISSIONS, "Insufficient permissions"),
-        (ERROR_ESI_UNAVAILABLE, "ESI API is currently unavailable"),
-        (ERROR_UNKNOWN, "Unknown error"),
-    ]
+    class Error(models.IntegerChoices):
+        NONE = 0, "No error"
+        TOKEN_INVALID = 1, "Invalid token"
+        TOKEN_EXPIRED = 2, "Expired token"
+        INSUFFICIENT_PERMISSIONS = 3, "Insufficient permissions"
+        ESI_UNAVAILABLE = 5, "ESI API is currently unavailable"
+        UNKNOWN = 99, "Unknown error"
 
     character_ownership = models.OneToOneField(
         CharacterOwnership, on_delete=models.CASCADE, primary_key=True
     )
     manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
-    version_hash = models.CharField(max_length=32, default="")
-    last_sync = models.DateTimeField(null=True, default=None)
-    last_error = models.IntegerField(choices=ERRORS_LIST, default=ERROR_NONE)
+    last_error = models.IntegerField(choices=Error.choices, default=Error.NONE)
 
     def __str__(self):
         return self.character_ownership.character.character_name
 
-    def set_sync_status(self, status):
-        """sets the sync status with the current date and time"""
-        self.last_error = status
-        self.last_sync = now()
-        self.save()
-
     def get_status_message(self):
-        if self.last_error != self.ERROR_NONE:
+        if self.last_error != self.Error.NONE:
             message = self.get_last_error_display()
         elif self.last_sync is not None:
             message = "OK"
@@ -240,7 +231,18 @@ class SyncedCharacter(models.Model):
 
         return message
 
-    def update(self, force_sync: bool = False):
+    def update(self, force_sync: bool = False) -> bool:
+        """updates in-game contacts for given character
+
+        Will delete the sync character if necessary,
+        e.g. if token is no longer valid or character is no longer blue
+
+        Args:
+        - force_sync: will ignore version_hash if set to true
+
+        Returns:
+        - False if the sync character was deleted, True otherwise
+        """
         user = self.character_ownership.user
         issue_title = f"Standings Sync deactivated for {self}"
 
@@ -270,7 +272,7 @@ class SyncedCharacter(models.Model):
                     user=self.character_ownership.user,
                     character_id=self.character_ownership.character.character_id,
                 )
-                .require_scopes(SyncedCharacter.get_esi_scopes())
+                .require_scopes(self.get_esi_scopes())
                 .require_valid()
                 .first()
             )
@@ -316,7 +318,7 @@ class SyncedCharacter(models.Model):
             return False
 
         if token is None:
-            self.set_sync_status(SyncedCharacter.ERROR_UNKNOWN)
+            self.set_sync_status(self.Error.UNKNOWN)
             raise RuntimeError("Can not find suitable token for synced char")
 
         logger.info("%s: Updating contacts with new version", self)
@@ -357,7 +359,7 @@ class SyncedCharacter(models.Model):
         # store updated version hash with character
         self.version_hash = self.manager.version_hash
         self.save()
-        self.set_sync_status(SyncedCharacter.ERROR_NONE)
+        self.set_sync_status(self.Error.NONE)
         return True
 
     def _issue_message(self, message):

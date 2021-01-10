@@ -17,17 +17,14 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 @shared_task
 def run_character_sync(sync_char_pk: int, force_sync: bool = False) -> bool:
-    """syncs contacts for one character
-
-    Will delete the sync character if necessary,
-    e.g. if token is no longer valid or character is no longer blue
+    """updates in-game contacts for given character
 
     Args:
-        sync_char_pk: primary key of sync character to run sync for
-        force_sync: will ignore version_hash if set to true
+    - sync_char_pk: primary key of sync character to run sync for
+    - force_sync: will ignore version_hash if set to true
 
     Returns:
-        False if the sync character was deleted, True otherwise
+    - False if the sync character was deleted, True otherwise
     """
 
     synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
@@ -35,21 +32,23 @@ def run_character_sync(sync_char_pk: int, force_sync: bool = False) -> bool:
         return synced_character.update(force_sync)
     except Exception as ex:
         logger.error("An unexpected error ocurred: %s", ex, exc_info=True)
-        synced_character.set_sync_status(SyncedCharacter.ERROR_UNKNOWN)
+        synced_character.set_sync_status(SyncedCharacter.Error.UNKNOWN)
         raise ex
 
 
 @shared_task
-def run_manager_sync(manager_pk: int, force_sync: bool = False, user_pk: int = None):
-    """sync contacts and related characters for one manager
+def run_manager_sync(
+    manager_pk: int, force_sync: bool = False, user_pk: int = None
+) -> bool:
+    """updates contacts for given manager and related characters
 
     Args:
-        manage_pk: primary key of sync manager to run sync for
-        force_sync: will ignore version_hash if set to true
-        user_pk: user to send a completion report to (optional)
+    - manage_pk: primary key of sync manager to run sync for
+    - force_sync: will ignore version_hash if set to true
+    - user_pk: user to send a completion report to (optional)
 
     Returns:
-        True on success or False on error
+    - True on success or False on error
     """
 
     sync_manager = SyncManager.objects.get(pk=manager_pk)

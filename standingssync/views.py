@@ -42,7 +42,7 @@ def index(request):
             "portrait_url": synced_character.character_ownership.character.portrait_url,
             "name": synced_character.character_ownership.character.character_name,
             "status_message": synced_character.get_status_message(),
-            "has_error": synced_character.last_error != SyncedCharacter.ERROR_NONE,
+            "has_error": synced_character.last_error != SyncedCharacter.Error.NONE,
             "pk": synced_character.pk,
         }
         for synced_character in characters_query

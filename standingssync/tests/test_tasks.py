@@ -61,7 +61,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             tasks.run_character_sync(generate_invalid_pk(SyncedCharacter))
 
     def test_delete_sync_character_if_insufficient_permission(self):
-        self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.ERROR_NONE)
+        self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
         self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
         self.assertFalse(
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
@@ -163,7 +163,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
 
         # check results
         synced_character.refresh_from_db()
-        self.assertEqual(synced_character.last_error, SyncedCharacter.ERROR_NONE)
+        self.assertEqual(synced_character.last_error, SyncedCharacter.Error.NONE)
         # self.assertEqual(mock_delete_result.result.call_count, 1)
         self.maxDiff = None
         expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
@@ -205,7 +205,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
         )
         sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.ERROR_NO_CHARACTER)
+        self.assertEqual(sync_manager.last_error, SyncManager.Error.NO_CHARACTER)
 
     # run without char
     def test_abort_when_insufficient_permission(self):
@@ -217,7 +217,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         )
         sync_manager.refresh_from_db()
         self.assertEqual(
-            sync_manager.last_error, SyncManager.ERROR_INSUFFICIENT_PERMISSIONS
+            sync_manager.last_error, SyncManager.Error.INSUFFICIENT_PERMISSIONS
         )
 
     @patch(MODELS_PATH + ".Token")
@@ -233,7 +233,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
             tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
         )
         sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.ERROR_TOKEN_INVALID)
+        self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
 
     # normal synch of new contacts
     @patch(MODELS_PATH + ".Token")
@@ -261,7 +261,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         # run manager sync
         self.assertTrue(tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk))
         sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.ERROR_NONE)
+        self.assertEqual(sync_manager.last_error, SyncManager.Error.NONE)
 
         # check results
         base_contact_ids = {x["contact_id"] for x in ESI_CONTACTS}
@@ -312,7 +312,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
 
         sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.ERROR_TOKEN_EXPIRED)
+        self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_EXPIRED)
 
     # test invalid token
     @patch(MODELS_PATH + ".Token")
@@ -329,4 +329,4 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
 
         sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.ERROR_TOKEN_INVALID)
+        self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
