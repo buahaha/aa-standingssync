@@ -30,7 +30,7 @@ compilemessages:
 	django-admin compilemessages -l zh_Hans
 
 coverage:
-	coverage run ../myauth/manage.py test $(appname) -v 2 --keepdb --failfast --debug-mode && coverage html && coverage report
+	coverage run ../myauth/manage.py test $(package).tests --keepdb --failfast --debug-mode && coverage html && coverage report
 
 test:
 	# runs a full test incl. re-creating of the test DB
@@ -51,4 +51,4 @@ flake8:
 	flake8 $(package) --count
 
 graph_models:
-	python ../myauth/manage.py graph_models $(appname) --arrow-shape normal -R -o $(pipname)_models.png
+	python ../myauth/manage.py graph_models $(package) --arrow-shape normal -o $(pipname)_models.png

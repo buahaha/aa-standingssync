@@ -13,7 +13,7 @@ from esi.errors import TokenExpiredError, TokenInvalidError
 from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
 
 from .. import tasks
-from ..models import SyncManager, SyncedCharacter, AllianceContact, EveWar, EveEntity
+from ..models import SyncManager, SyncedCharacter, EveContact, EveWar, EveEntity
 from ..utils import NoSocketsTestCase, generate_invalid_pk
 
 
@@ -84,10 +84,9 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             version_hash="new",
         )
         for contact in ESI_CONTACTS:
-            AllianceContact.objects.create(
+            EveContact.objects.create(
                 manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
             )
 
@@ -141,8 +140,8 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             "standingssync.add_syncedcharacter", self.user_1
         )
         # set standing for sync contact to non blue
-        contact = AllianceContact.objects.get(
-            manager=self.sync_manager, contact_id=int(self.character_2.character_id)
+        contact = self.sync_manager.contacts.get(
+            eve_entity_id=self.character_2.character_id
         )
         contact.standing = -10
         contact.save()
@@ -282,7 +281,7 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
             # when
             sync_manager = self._run_sync(mock_esi, mock_run_character_sync, mock_Token)
         # then (continued)
-        contact = sync_manager.contacts.get(contact_id=3015)
+        contact = sync_manager.contacts.get(eve_entity_id=3015)
         self.assertEqual(contact.standing, 10.0)
 
     @patch(MODELS_PATH + ".Token")
@@ -305,7 +304,7 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
             # when
             sync_manager = self._run_sync(mock_esi, mock_run_character_sync, mock_Token)
         # then (continued)
-        contact = sync_manager.contacts.get(contact_id=3015)
+        contact = sync_manager.contacts.get(eve_entity_id=3015)
         self.assertEqual(contact.standing, -10.0)
 
     def _run_sync(self, mock_esi, mock_run_character_sync, mock_Token):
@@ -334,7 +333,7 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         expected_contact_ids = {x["contact_id"] for x in ESI_CONTACTS}
         expected_contact_ids.add(self.character_1.alliance_id)
         result_contact_ids = set(
-            sync_manager.contacts.values_list("contact_id", flat=True)
+            sync_manager.contacts.values_list("eve_entity_id", flat=True)
         )
         self.assertSetEqual(expected_contact_ids, result_contact_ids)
         self.assertTrue(mock_run_character_sync.delay.called)

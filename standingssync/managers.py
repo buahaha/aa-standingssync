@@ -13,7 +13,7 @@ from .utils import LoggerAddTag
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-class AllianceContactManager(models.Manager):
+class EveContactManager(models.Manager):
     def grouped_by_standing(self, sync_manager: object) -> dict:
         """returns alliance contacts grouped by their standing as dict"""
 
@@ -27,6 +27,21 @@ class AllianceContactManager(models.Manager):
 
 
 class EveEntityManager(models.Manager):
+    def create_from_esi_contact(
+        self, contact_id: int, contact_type: str
+    ) -> models.Model:
+        return self.create(
+            id=contact_id, category=self.model.Category.from_esi_type(contact_type)
+        )
+
+    def get_or_create_from_esi_contact(
+        self, contact_id: int, contact_type: str
+    ) -> models.Model:
+        return self.get_or_create(
+            id=contact_id,
+            defaults={"category": self.model.Category.from_esi_type(contact_type)},
+        )
+
     def get_or_create_from_esi_info(self, info) -> Tuple[models.Model, bool]:
         """returns an EveEntity object for the given esi info
         will return existing or create new one if needed

@@ -17,7 +17,7 @@ from allianceauth.services.hooks import get_extension_logger
 from . import __title__
 from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING, STANDINGSSYNC_ADD_WAR_TARGETS
 from .managers import (
-    AllianceContactManager,
+    EveContactManager,
     EveEntityManager,
     EveWarManager,
     SyncManagerManager,
@@ -79,19 +79,19 @@ class SyncManager(_SyncBaseModel):
 
         contact_found = None
         try:
-            contact_found = self.contacts.get(contact_id=int(character.character_id))
-        except AllianceContact.DoesNotExist:
+            contact_found = self.contacts.get(eve_entity_id=character.character_id)
+        except EveContact.DoesNotExist:
             try:
                 contact_found = self.contacts.get(
-                    contact_id=int(character.corporation_id)
+                    eve_entity_id=character.corporation_id
                 )
-            except AllianceContact.DoesNotExist:
+            except EveContact.DoesNotExist:
                 if character.alliance_id:
                     try:
                         contact_found = self.contacts.get(
-                            contact_id=int(character.alliance_id)
+                            eve_entity_id=character.alliance_id
                         )
-                    except AllianceContact.DoesNotExist:
+                    except EveContact.DoesNotExist:
                         pass
 
         return contact_found.standing if contact_found is not None else 0.0
@@ -178,10 +178,11 @@ class SyncManager(_SyncBaseModel):
                 self.contacts.all().delete()
                 # TODO: Change to bulk create
                 for contact_id, contact in contacts.items():
-                    AllianceContact.objects.create(
+                    EveContact.objects.create(
                         manager=self,
-                        contact_id=contact_id,
-                        contact_type=contact["contact_type"],
+                        eve_entity=EveEntity.objects.get_or_create_from_esi_contact(
+                            contact_id=contact_id, contact_type=contact["contact_type"]
+                        )[0],
                         standing=contact["standing"],
                     )
                 self.version_hash = new_version_hash
@@ -337,13 +338,14 @@ class SyncedCharacter(_SyncBaseModel):
             )
 
         # write alliance contacts to ESI
-        contacts_by_standing = AllianceContact.objects.grouped_by_standing(
+        contacts_by_standing = EveContact.objects.grouped_by_standing(
             sync_manager=self.manager
         )
         max_items = 100
         for standing in contacts_by_standing.keys():
             contact_ids_chunks = chunks(
-                [c.contact_id for c in contacts_by_standing[standing]], max_items
+                [contact.eve_entity_id for contact in contacts_by_standing[standing]],
+                max_items,
             )
             for contact_ids_chunk in contact_ids_chunks:
                 esi.client.Contacts.post_characters_character_id_contacts(
@@ -372,8 +374,8 @@ class SyncedCharacter(_SyncBaseModel):
         return ["esi-characters.read_contacts.v1", "esi-characters.write_contacts.v1"]
 
 
+"""
 class AllianceContact(models.Model):
-    """An alliance contact with standing"""
 
     manager = models.ForeignKey(
         SyncManager, on_delete=models.CASCADE, related_name="contacts"
@@ -393,9 +395,12 @@ class AllianceContact(models.Model):
                 fields=["manager", "contact_id"], name="manager-contacts-unq"
             )
         ]
+"""
 
 
 class EveEntity(models.Model):
+    """A character, corporation or alliance in Eve Online"""
+
     class Category(models.TextChoices):
         ALLIANCE = "AL", _("alliance")
         CORPORATION = "CO", _("corporation")
@@ -407,6 +412,15 @@ class EveEntity(models.Model):
                 cls.ALLIANCE: "alliance",
                 cls.CORPORATION: "corporation",
                 cls.CHARACTER: "character",
+            }
+            return my_map[key]
+
+        @classmethod
+        def from_esi_type(cls, key) -> str:
+            my_map = {
+                "alliance": cls.ALLIANCE,
+                "corporation": cls.CORPORATION,
+                "character": cls.CHARACTER,
             }
             return my_map[key]
 
@@ -424,6 +438,30 @@ class EveEntity(models.Model):
             "contact_type": self.Category.to_esi_type(self.category),
             "standing": standing,
         }
+
+
+class EveContact(models.Model):
+    """An Eve Online contact"""
+
+    manager = models.ForeignKey(
+        SyncManager, on_delete=models.CASCADE, related_name="contacts"
+    )
+    eve_entity = models.ForeignKey(
+        EveEntity, on_delete=models.CASCADE, related_name="contacts"
+    )
+    standing = models.FloatField()
+
+    objects = EveContactManager()
+
+    def __str__(self):
+        return "{}:{}".format(self.contact_type, self.contact_id)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["manager", "eve_entity"], name="fk_eve_contact"
+            )
+        ]
 
 
 class EveWar(models.Model):

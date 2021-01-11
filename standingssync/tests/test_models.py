@@ -9,7 +9,7 @@ from allianceauth.eveonline.models import EveCharacter
 from . import LoadTestDataMixin, create_test_user, ESI_CONTACTS, BravadoOperationStub
 from ..models import (
     SyncManager,
-    AllianceContact,
+    EveContact,
     SyncedCharacter,
     EveEntity,
     EveWar,
@@ -36,21 +36,20 @@ class TestGetEffectiveStanding(LoadTestDataMixin, NoSocketsTestCase):
             alliance=cls.alliance_1, character_ownership=cls.main_ownership_1
         )
         contacts = [
-            {"contact_id": 101, "contact_type": "character", "standing": -10},
-            {"contact_id": 201, "contact_type": "corporation", "standing": 10},
-            {"contact_id": 301, "contact_type": "alliance", "standing": 5},
+            {"contact_id": 1001, "contact_type": "character", "standing": -10},
+            {"contact_id": 2001, "contact_type": "corporation", "standing": 10},
+            {"contact_id": 3001, "contact_type": "alliance", "standing": 5},
         ]
         for contact in contacts:
-            AllianceContact.objects.create(
+            EveContact.objects.create(
                 manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
             )
 
     def test_char_with_character_standing(self):
         c1 = EveCharacter(
-            character_id=101,
+            character_id=1001,
             character_name="Char 1",
             corporation_id=201,
             corporation_name="Corporation 1",
@@ -60,9 +59,9 @@ class TestGetEffectiveStanding(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_char_with_corporation_standing(self):
         c2 = EveCharacter(
-            character_id=102,
+            character_id=1002,
             character_name="Char 2",
-            corporation_id=201,
+            corporation_id=2001,
             corporation_name="Corporation 1",
             corporation_ticker="C1",
         )
@@ -70,12 +69,12 @@ class TestGetEffectiveStanding(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_char_with_alliance_standing(self):
         c3 = EveCharacter(
-            character_id=103,
+            character_id=1003,
             character_name="Char 3",
-            corporation_id=203,
+            corporation_id=2003,
             corporation_name="Corporation 3",
             corporation_ticker="C2",
-            alliance_id=301,
+            alliance_id=3001,
             alliance_name="Alliance 1",
             alliance_ticker="A1",
         )
@@ -83,12 +82,12 @@ class TestGetEffectiveStanding(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_char_without_standing_and_has_alliance(self):
         c4 = EveCharacter(
-            character_id=103,
+            character_id=1003,
             character_name="Char 3",
-            corporation_id=203,
+            corporation_id=2003,
             corporation_name="Corporation 3",
             corporation_ticker="C2",
-            alliance_id=302,
+            alliance_id=3002,
             alliance_name="Alliance 2",
             alliance_ticker="A2",
         )
@@ -96,9 +95,9 @@ class TestGetEffectiveStanding(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_char_without_standing_and_without_alliance_1(self):
         c4 = EveCharacter(
-            character_id=103,
+            character_id=1003,
             character_name="Char 3",
-            corporation_id=203,
+            corporation_id=2003,
             corporation_name="Corporation 3",
             corporation_ticker="C2",
             alliance_id=None,
@@ -109,9 +108,9 @@ class TestGetEffectiveStanding(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_char_without_standing_and_without_alliance_2(self):
         c4 = EveCharacter(
-            character_id=103,
+            character_id=1003,
             character_name="Char 3",
-            corporation_id=203,
+            corporation_id=2003,
             corporation_name="Corporation 3",
             corporation_ticker="C2",
         )
@@ -133,15 +132,14 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
             alliance=cls.alliance_1, character_ownership=cls.main_ownership_1
         )
         contacts = [
-            {"contact_id": 101, "contact_type": "character", "standing": -10},
-            {"contact_id": 201, "contact_type": "corporation", "standing": 10},
-            {"contact_id": 301, "contact_type": "alliance", "standing": 5},
+            {"contact_id": 1001, "contact_type": "character", "standing": -10},
+            {"contact_id": 2001, "contact_type": "corporation", "standing": 10},
+            {"contact_id": 3001, "contact_type": "alliance", "standing": 5},
         ]
         for contact in contacts:
-            AllianceContact.objects.create(
+            EveContact.objects.create(
                 manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
             )
 
@@ -215,7 +213,7 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         self.assertIsNotNone(self.synced_character.last_sync)
 
 
-class TestAllianceContactManager(LoadTestDataMixin, NoSocketsTestCase):
+class TestEveContactManager(LoadTestDataMixin, NoSocketsTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -236,10 +234,9 @@ class TestAllianceContactManager(LoadTestDataMixin, NoSocketsTestCase):
             version_hash="new",
         )
         for contact in ESI_CONTACTS:
-            AllianceContact.objects.create(
+            EveContact.objects.create(
                 manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
             )
 
@@ -250,10 +247,8 @@ class TestAllianceContactManager(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_grouped_by_standing(self):
         c = {
-            int(x.contact_id): x
-            for x in AllianceContact.objects.filter(manager=self.sync_manager).order_by(
-                "contact_id"
-            )
+            int(x.eve_entity_id): x
+            for x in self.sync_manager.contacts.order_by("eve_entity_id")
         }
         expected = {
             -10.0: {c[1005], c[1012], c[3011], c[2011]},
@@ -262,7 +257,7 @@ class TestAllianceContactManager(LoadTestDataMixin, NoSocketsTestCase):
             5.0: {c[1015], c[3014], c[2013]},
             10.0: {c[1002], c[1004], c[1016], c[3015], c[2015]},
         }
-        result = AllianceContact.objects.grouped_by_standing(self.sync_manager)
+        result = EveContact.objects.grouped_by_standing(self.sync_manager)
         self.maxDiff = None
         self.assertDictEqual(result, expected)
 

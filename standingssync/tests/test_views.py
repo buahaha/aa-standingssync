@@ -2,7 +2,7 @@ from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
 from django.contrib.sessions.middleware import SessionMiddleware
-from django.test import RequestFactory
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from allianceauth.eveonline.models import EveCharacter
@@ -12,7 +12,7 @@ from allianceauth.tests.auth_utils import AuthUtils
 from esi.models import Token
 
 from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS
-from ..models import SyncManager, SyncedCharacter, AllianceContact
+from ..models import SyncManager, SyncedCharacter, EveContact, EveEntity
 from ..utils import NoSocketsTestCase
 from .. import views
 
@@ -20,7 +20,7 @@ from .. import views
 MODULE_PATH = "standingssync.views"
 
 
-class TestMainScreen(LoadTestDataMixin, NoSocketsTestCase):
+class TestMainScreen(LoadTestDataMixin, TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -37,10 +37,9 @@ class TestMainScreen(LoadTestDataMixin, NoSocketsTestCase):
             version_hash="new",
         )
         for contact in ESI_CONTACTS:
-            AllianceContact.objects.create(
+            EveContact.objects.create(
                 manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
             )
 
@@ -110,10 +109,9 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
             version_hash="new",
         )
         for contact in ESI_CONTACTS:
-            AllianceContact.objects.create(
+            EveContact.objects.create(
                 manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
             )
 
@@ -250,10 +248,9 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
             version_hash="new",
         )
         for contact in ESI_CONTACTS:
-            AllianceContact.objects.create(
+            EveContact.objects.create(
                 manager=cls.sync_manager,
-                contact_id=contact["contact_id"],
-                contact_type=contact["contact_type"],
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
             )
         AuthUtils.add_permission_to_user_by_name(
