@@ -4,6 +4,7 @@ from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
 
+from .helpers import is_esi_online
 from .models import SyncManager, SyncedCharacter, EveWar
 from .providers import esi
 from .utils import LoggerAddTag
@@ -14,7 +15,11 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 @shared_task
 def run_regular_sync():
-    """syncs all managers and related characters if needed"""
+    """update all wars, managers and related characters if needed"""
+    if not is_esi_online():
+        logger.warning("ESI is not online. aborting")
+        return
+
     update_all_wars.delay()
     for sync_manager_pk in SyncManager.objects.values_list("pk", flat=True):
         run_manager_sync.delay(sync_manager_pk)
@@ -75,8 +80,8 @@ def run_character_sync(sync_char_pk: int, force_sync: bool = False) -> bool:
 
 @shared_task
 def update_all_wars():
-    logger.info("Removing outdated wars")
-    EveWar.objects.delete_outdated()
+    logger.info("Removing finished wars")
+    EveWar.objects.finished_wars().delete()
     logger.info("Retrieving wars from ESI")
     war_ids = esi.client.Wars.get_wars().results()
     logger.info("Retrieved %s wars from ESI", len(war_ids))

@@ -20,7 +20,6 @@ from .managers import (
     AllianceContactManager,
     EveEntityManager,
     EveWarManager,
-    EveWarProtagonistManager,
     SyncManagerManager,
 )
 from .providers import esi
@@ -427,30 +426,17 @@ class EveEntity(models.Model):
         }
 
 
-class EveWarProtagonist(models.Model):
-    """A attacker or defender in a war"""
-
-    eve_entity = models.ForeignKey(EveEntity, on_delete=models.CASCADE)
-    isk_destroyed = models.FloatField()
-    ships_killed = models.PositiveIntegerField()
-
-    objects = EveWarProtagonistManager()
-
-    def __str__(self) -> str:
-        return str(self.eve_entity)
-
-
 class EveWar(models.Model):
     """An EveOnline war"""
 
     id = models.PositiveIntegerField(primary_key=True)
-    aggressor = models.OneToOneField(
-        EveWarProtagonist, on_delete=models.CASCADE, related_name="aggressor_war"
+    aggressor = models.ForeignKey(
+        EveEntity, on_delete=models.CASCADE, related_name="aggressor_war"
     )
     allies = models.ManyToManyField(EveEntity, related_name="ally")
     declared = models.DateTimeField()
-    defender = models.OneToOneField(
-        EveWarProtagonist, on_delete=models.CASCADE, related_name="defender_war"
+    defender = models.ForeignKey(
+        EveEntity, on_delete=models.CASCADE, related_name="defender_war"
     )
     finished = models.DateTimeField(null=True, default=None, db_index=True)
     is_mutual = models.BooleanField()
