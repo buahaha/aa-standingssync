@@ -7,18 +7,26 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('standingssync', '0003_add_wars'),
+        ("standingssync", "0003_add_wars"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='alliancecontact',
-            name='manager',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='contacts', to='standingssync.syncmanager'),
+            model_name="alliancecontact",
+            name="manager",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="contacts",
+                to="standingssync.syncmanager",
+            ),
         ),
         migrations.AlterField(
-            model_name='syncedcharacter',
-            name='manager',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='synced_characters', to='standingssync.syncmanager'),
+            model_name="syncedcharacter",
+            name="manager",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="synced_characters",
+                to="standingssync.syncmanager",
+            ),
         ),
     ]

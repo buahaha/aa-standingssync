@@ -26,6 +26,7 @@ Here is an high level overview of the main features:
 - Synchronize alliance contacts to chosen non-alliance characters
 - Synchronization is ongoing until user chooses to remove character from synchronization
 - Supports multiple alliances
+- Can sync war targets
 - Synchronization automatically ceases once the user is no longer eligible
 
 ## Screenshot
@@ -125,6 +126,7 @@ Here is a list of available settings for this app. They can be configured by add
 Name | Description | Default
 -- | -- | --
 `STANDINGSSYNC_CHAR_MIN_STANDING`| minimum standing a character needs to have with the alliance to be able to sync.<br>Set to `0.0` if you want to allow neutral alts to sync. | `0.1`<br>*character has to have some blue standing, neutrals will be rejected*
+`STANDINGSSYNC_ADD_WAR_TARGETS`| When enabled will automatically add current war targets with -10 standing to synced characters | `False`
 
 ## Permissions
 

@@ -534,3 +534,35 @@ class TestEveWarManager(LoadTestDataMixin, NoSocketsTestCase):
         self.assertTrue(war.is_open_for_allies)
         self.assertIsNone(war.retracted)
         self.assertEqual(war.started, started)
+
+
+class TestEveEntity(LoadTestDataMixin, NoSocketsTestCase):
+    def test_should_return_esi_dict_for_character(self):
+        # given
+        obj = EveEntity.objects.get(id=1001)
+        # when
+        result = obj.to_esi_dict(5.0)
+        # then
+        self.assertDictEqual(
+            result, {"contact_id": 1001, "contact_type": "character", "standing": 5.0}
+        )
+
+    def test_should_return_esi_dict_for_corporation(self):
+        # given
+        obj = EveEntity.objects.get(id=2001)
+        # when
+        result = obj.to_esi_dict(2.0)
+        # then
+        self.assertDictEqual(
+            result, {"contact_id": 2001, "contact_type": "corporation", "standing": 2.0}
+        )
+
+    def test_should_return_esi_dict_for_alliance(self):
+        # given
+        obj = EveEntity.objects.get(id=3001)
+        # when
+        result = obj.to_esi_dict(-2.0)
+        # then
+        self.assertDictEqual(
+            result, {"contact_id": 3001, "contact_type": "alliance", "standing": -2.0}
+        )

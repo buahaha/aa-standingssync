@@ -51,7 +51,7 @@ class EveWarManager(models.Manager):
 
     def delete_outdated(self):
         to_be_deleted = list(self.order_by("-id")[2000:])
-        return self.filter(pk_in=to_be_deleted).delete()
+        return self.filter(pk__in=to_be_deleted).delete()
 
     def war_targets(self, alliance_id: int) -> List[models.Model]:
         """returns list of current war targets for given alliance as EveEntity objects

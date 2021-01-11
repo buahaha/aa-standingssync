@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+### Added
+
+- Optionally sync war targets to alt characters [#5](https://gitlab.com/ErikKalkoken/aa-standingssync/-/issues/5)
+
 ### Changed
 
 - Remove support for Django 2

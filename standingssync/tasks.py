@@ -15,6 +15,7 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 @shared_task
 def run_regular_sync():
     """syncs all managers and related characters if needed"""
+    update_all_wars.delay()
     for sync_manager_pk in SyncManager.objects.values_list("pk", flat=True):
         run_manager_sync.delay(sync_manager_pk)
 

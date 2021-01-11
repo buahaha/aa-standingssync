@@ -1,6 +1,7 @@
 import datetime as dt
 from unittest.mock import Mock, patch
 
+from django.test import TestCase
 from django.utils.timezone import now
 
 from allianceauth.authentication.models import CharacterOwnership
@@ -30,6 +31,33 @@ from ..utils import NoSocketsTestCase, generate_invalid_pk
 
 TASKS_PATH = "standingssync.tasks"
 MODELS_PATH = "standingssync.models"
+
+
+@patch(TASKS_PATH + ".run_manager_sync")
+@patch(TASKS_PATH + ".update_all_wars")
+class TestRunRegularSync(LoadTestDataMixin, NoSocketsTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # given
+        cls.user_1 = create_test_user(cls.character_1)
+        cls.main_ownership_1 = CharacterOwnership.objects.get(
+            character=cls.character_1, user=cls.user_1
+        )
+
+    def test_should_start_all_tasks(self, mock_update_all_wars, mock_run_manager_sync):
+        # given
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance_1,
+            character_ownership=self.main_ownership_1,
+            version_hash="new",
+        )
+        # when
+        tasks.run_regular_sync()
+        # then
+        self.assertTrue(mock_update_all_wars.delay.called)
+        args, _ = mock_run_manager_sync.delay.call_args
+        self.assertEqual(args[0], sync_manager.pk)
 
 
 class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
@@ -186,7 +214,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         self.assertDictEqual(characters_contacts[character_id], expected)
 
 
-class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
+class TestManagerSync(LoadTestDataMixin, TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -257,7 +285,6 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         contact = sync_manager.contacts.get(contact_id=3015)
         self.assertEqual(contact.standing, 10.0)
 
-    """
     @patch(MODELS_PATH + ".Token")
     @patch(TASKS_PATH + ".run_character_sync")
     @patch(MODELS_PATH + ".esi")
@@ -287,7 +314,6 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         # then (continued)
         contact = sync_manager.contacts.get(contact_id=3015)
         self.assertEqual(contact.standing, -10.0)
-    """
 
     def _run_sync(self, mock_esi, mock_run_character_sync, mock_Token):
         def esi_get_alliances_alliance_id_contacts(*args, **kwargs):
@@ -378,3 +404,28 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
 
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
+
+
+class TestUpdateWars(LoadTestDataMixin, NoSocketsTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+    @patch(TASKS_PATH + ".update_war")
+    @patch(TASKS_PATH + ".esi")
+    def test_should_start_tasks_for_each_war_id(self, mock_esi, mock_update_war):
+        # given
+        mock_esi.client.Wars.get_wars.return_value = BravadoOperationStub([1, 2, 3])
+        # when
+        tasks.update_all_wars()
+        # then
+        result = {row[0][0] for row in mock_update_war.delay.call_args_list}
+        self.assertSetEqual(result, {1, 2, 3})
+
+    @patch(TASKS_PATH + ".EveWar.objects.update_from_esi")
+    def test_should_update_war(self, mock_update_from_esi):
+        # when
+        tasks.update_war(42)
+        # then
+        args, _ = mock_update_from_esi.call_args
+        self.assertEqual(args[0], 42)

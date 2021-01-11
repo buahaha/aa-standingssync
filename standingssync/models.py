@@ -155,18 +155,22 @@ class SyncManager(_SyncBaseModel):
     def _perform_update_from_esi(self, token, force_sync) -> str:
         # get alliance contacts
         alliance_id = self.character_ownership.character.alliance_id
-        contacts = esi.client.Contacts.get_alliances_alliance_id_contacts(
+        contacts_raw = esi.client.Contacts.get_alliances_alliance_id_contacts(
             token=token.valid_access_token(), alliance_id=alliance_id
         ).results()
+        contacts = {int(row["contact_id"]): row for row in contacts_raw}
+
+        if STANDINGSSYNC_ADD_WAR_TARGETS:
+            for war_target in EveWar.objects.war_targets(alliance_id):
+                contacts[war_target.id] = war_target.to_esi_dict(-10.0)
 
         # determine if contacts have changed by comparing their hashes
         new_version_hash = hashlib.md5(json.dumps(contacts).encode("utf-8")).hexdigest()
         if force_sync or new_version_hash != self.version_hash:
             logger.info("%s: Storing alliance update with %s contacts", self, contacts)
-            contacts_unique = {int(c["contact_id"]): c for c in contacts}
 
             # add the sync alliance with max standing to contacts
-            contacts_unique[alliance_id] = {
+            contacts[alliance_id] = {
                 "contact_id": alliance_id,
                 "contact_type": "alliance",
                 "standing": 10,
@@ -174,7 +178,7 @@ class SyncManager(_SyncBaseModel):
             with transaction.atomic():
                 self.contacts.all().delete()
                 # TODO: Change to bulk create
-                for contact_id, contact in contacts_unique.items():
+                for contact_id, contact in contacts.items():
                     AllianceContact.objects.create(
                         manager=self,
                         contact_id=contact_id,
@@ -398,6 +402,15 @@ class EveEntity(models.Model):
         CORPORATION = "CO", _("corporation")
         CHARACTER = "CH", _("character")
 
+        @classmethod
+        def to_esi_type(cls, key) -> str:
+            my_map = {
+                cls.ALLIANCE: "alliance",
+                cls.CORPORATION: "corporation",
+                cls.CHARACTER: "character",
+            }
+            return my_map[key]
+
     id = models.PositiveIntegerField(primary_key=True)
     category = models.CharField(max_length=2, choices=Category.choices, db_index=True)
 
@@ -405,6 +418,13 @@ class EveEntity(models.Model):
 
     def __str__(self) -> str:
         return f"{self.id}-{self.category}"
+
+    def to_esi_dict(self, standing: float) -> dict:
+        return {
+            "contact_id": self.id,
+            "contact_type": self.Category.to_esi_type(self.category),
+            "standing": standing,
+        }
 
 
 class EveWarProtagonist(models.Model):

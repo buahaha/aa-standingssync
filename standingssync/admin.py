@@ -73,10 +73,10 @@ class SyncManagerAdmin(admin.ModelAdmin):
         return obj.alliance.alliance_name
 
     def contacts_count(self, obj):
-        return "{:,}".format(obj.alliancecontact_set.count())
+        return "{:,}".format(obj.contacts.count())
 
     def synced_characters_count(self, obj):
-        return "{:,}".format(obj.syncedcharacter_set.count())
+        return "{:,}".format(obj.synced_characters.count())
 
     # This will help you to disbale add functionality
     def has_add_permission(self, request):
@@ -86,9 +86,7 @@ class SyncManagerAdmin(admin.ModelAdmin):
 
         names = list()
         for obj in queryset:
-            tasks.run_manager_sync.delay(
-                manager_pk=obj.pk, force_sync=True, user_pk=request.user.pk
-            )
+            tasks.run_manager_sync.delay(manager_pk=obj.pk, force_sync=True)
             names.append(str(obj))
 
         text = "Started syncing for: {} ".format(", ".join(names))

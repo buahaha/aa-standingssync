@@ -8,5 +8,5 @@ STANDINGSSYNC_CHAR_MIN_STANDING = clean_setting(
 )
 
 # When enabled will automatically add war targets
-# with standing = -10 to synced contacts
+# with standing = -10 to synced characters
 STANDINGSSYNC_ADD_WAR_TARGETS = clean_setting("STANDINGSSYNC_ADD_WAR_TARGETS", False)
