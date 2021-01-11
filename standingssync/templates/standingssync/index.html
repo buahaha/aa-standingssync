@@ -6,7 +6,7 @@
 
     <div class="panel panel-default">
         <div class="panel-heading" style="display:flex;">
-            <h3 class="panel-title">{% trans 'Alliance Available for Sync' %}</h3>
+            <h3 class="panel-title">{% trans 'Alliance for Sync' %}</h3>
         </div>
         <div class="panel-body">
             {% if alliance_contacts_count != None %}
@@ -14,7 +14,11 @@
                 &nbsp;&nbsp;
                 {{ alliance.alliance_name }}
                 &nbsp;
-                ({{ alliance_contacts_count }} contacts)
+                ({{ alliance_contacts_count }} contacts
+                {% if alliance_war_targets_count != None %}
+                , {{ alliance_war_targets_count }} war targets
+                {% endif %}
+                )
             {% else %}
                 None
             {% endif %}
@@ -85,9 +89,10 @@
 
     <div class="bs-callout bs-callout-warning">
         <h4>Read Me First</h4>
-        <p>This app enables you to always have the current alliance standings on your non-alliance character.
+        <p>This app enables you to always have the current alliance standings on your non-alliance characters.
             Once activated it will automatically replace the personal contacts of your character with
             the current Alliance contacts and will continue to do so until deactivated.</p>
+            <p>If enabled current war targets will also be added as contacts with -10 standing.</p>
             <p><strong>Careful!</strong> You will loose all your personal contacts on a synced character, so use with care.</p>
     </div>
 

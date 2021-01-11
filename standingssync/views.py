@@ -8,7 +8,7 @@ from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from allianceauth.services.hooks import get_extension_logger
 
 from . import tasks, __title__
-from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
+from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING, STANDINGSSYNC_ADD_WAR_TARGETS
 from .models import SyncManager, SyncedCharacter
 from .utils import LoggerAddTag, messages_plus
 
@@ -20,7 +20,7 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 @permission_required("standingssync.add_syncedcharacter")
 def index(request):
     """main page"""
-    if request.user.profile.main_character is None:
+    if not request.user.profile.main_character:
         sync_manager = None
     else:
         try:
@@ -52,12 +52,24 @@ def index(request):
         "synced_characters": synced_characters,
         "has_synced_chars": len(synced_characters) > 0,
     }
-    if sync_manager is not None:
+    if sync_manager:
         context["alliance"] = sync_manager.alliance
-        context["alliance_contacts_count"] = sync_manager.contacts.count()
+        alliance_contacts_count = sync_manager.contacts.filter(
+            is_war_target=False
+        ).count()
+        if STANDINGSSYNC_ADD_WAR_TARGETS:
+            alliance_war_targets_count = sync_manager.contacts.filter(
+                is_war_target=True
+            ).count()
+        else:
+            alliance_war_targets_count = None
     else:
         context["alliance"] = None
-        context["alliance_contacts_count"] = None
+        alliance_contacts_count = None
+        alliance_war_targets_count = None
+
+    context["alliance_contacts_count"] = alliance_contacts_count
+    context["alliance_war_targets_count"] = alliance_war_targets_count
 
     return render(request, "standingssync/index.html", context)
 

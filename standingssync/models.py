@@ -20,7 +20,6 @@ from .managers import (
     EveContactManager,
     EveEntityManager,
     EveWarManager,
-    SyncManagerManager,
 )
 from .providers import esi
 from .utils import LoggerAddTag, chunks
@@ -64,8 +63,6 @@ class SyncManager(_SyncBaseModel):
         CharacterOwnership, on_delete=models.SET_NULL, null=True, default=None
     )
     last_error = models.IntegerField(choices=Error.choices, default=Error.NONE)
-
-    objects = SyncManagerManager()
 
     def __str__(self):
         if self.character_ownership is not None:
@@ -160,8 +157,12 @@ class SyncManager(_SyncBaseModel):
         contacts = {int(row["contact_id"]): row for row in contacts_raw}
 
         if STANDINGSSYNC_ADD_WAR_TARGETS:
-            for war_target in EveWar.objects.war_targets(alliance_id):
+            war_targets = EveWar.objects.war_targets(alliance_id)
+            for war_target in war_targets:
                 contacts[war_target.id] = war_target.to_esi_dict(-10.0)
+            war_target_ids = {war_target.id for war_target in war_targets}
+        else:
+            war_target_ids = set()
 
         # determine if contacts have changed by comparing their hashes
         new_version_hash = hashlib.md5(json.dumps(contacts).encode("utf-8")).hexdigest()
@@ -175,18 +176,22 @@ class SyncManager(_SyncBaseModel):
                 "standing": 10,
             }
             with transaction.atomic():
+                self.version_hash = new_version_hash
+                self.save()
                 self.contacts.all().delete()
-                # TODO: Change to bulk create
-                for contact_id, contact in contacts.items():
-                    EveContact.objects.create(
+                contacts = [
+                    EveContact(
                         manager=self,
                         eve_entity=EveEntity.objects.get_or_create_from_esi_contact(
                             contact_id=contact_id, contact_type=contact["contact_type"]
                         )[0],
                         standing=contact["standing"],
+                        is_war_target=contact_id in war_target_ids,
                     )
-                self.version_hash = new_version_hash
-                self.save()
+                    for contact_id, contact in contacts.items()
+                ]
+                EveContact.objects.bulk_create(contacts, batch_size=500)
+
         else:
             logger.info("%s: Alliance contacts are unchanged.", self)
 
@@ -450,6 +455,7 @@ class EveContact(models.Model):
         EveEntity, on_delete=models.CASCADE, related_name="contacts"
     )
     standing = models.FloatField()
+    is_war_target = models.BooleanField()
 
     objects = EveContactManager()
 

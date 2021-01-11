@@ -135,7 +135,3 @@ class EveWarManager(models.Manager):
             for ally_info in war_info.get("allies"):
                 eve_entity = EveEntity.objects.get_or_create_from_esi_info(ally_info)[0]
                 war.allies.add(eve_entity)
-
-
-class SyncManagerManager(models.Manager):
-    pass

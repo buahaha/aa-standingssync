@@ -45,6 +45,7 @@ class TestGetEffectiveStanding(LoadTestDataMixin, NoSocketsTestCase):
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
+                is_war_target=False,
             )
 
     def test_char_with_character_standing(self):
@@ -141,6 +142,7 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
+                is_war_target=False,
             )
 
     def test_set_sync_status(self):
@@ -238,6 +240,7 @@ class TestEveContactManager(LoadTestDataMixin, NoSocketsTestCase):
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
+                is_war_target=False,
             )
 
         # sync char

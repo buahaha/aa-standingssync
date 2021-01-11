@@ -41,6 +41,7 @@ class TestMainScreen(LoadTestDataMixin, TestCase):
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
+                is_war_target=False,
             )
 
         # user 2 is a normal user and has two alts and permission
@@ -113,6 +114,7 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
+                is_war_target=False,
             )
 
         # user 2 is a normal user and has three alts
@@ -252,6 +254,7 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
+                is_war_target=False,
             )
         AuthUtils.add_permission_to_user_by_name(
             "standingssync.add_syncedcharacter", cls.user_1

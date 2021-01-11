@@ -88,6 +88,7 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
                 standing=contact["standing"],
+                is_war_target=False,
             )
 
         # sync char
@@ -243,34 +244,46 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         with self.assertRaises(SyncManager.DoesNotExist):
             tasks.run_manager_sync(99999)
 
-    def test_abort_when_no_char(self, mock_run_character_sync):
+    def test_should_abort_when_no_char(self, mock_run_character_sync):
+        # given
         sync_manager = SyncManager.objects.create(alliance=self.alliance_1)
-        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
+        # when
+        result = tasks.run_manager_sync(sync_manager.pk)
+        # then
+        self.assertFalse(result)
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.NO_CHARACTER)
 
     # run without char
-    def test_abort_when_insufficient_permission(self, mock_run_character_sync):
+    def test_should_abort_when_insufficient_permission(self, mock_run_character_sync):
+        # given
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1, character_ownership=self.main_ownership_2
         )
+        # when
         self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
+        # then
         sync_manager.refresh_from_db()
         self.assertEqual(
             sync_manager.last_error, SyncManager.Error.INSUFFICIENT_PERMISSIONS
         )
 
     @patch(MODELS_PATH + ".Token")
-    def test_run_sync_error_on_no_token(self, mock_Token, mock_run_character_sync):
+    def test_should_report_error_when_character_has_no_token(
+        self, mock_Token, mock_run_character_sync
+    ):
+        # given
         mock_Token.objects.filter.return_value.require_scopes.return_value.require_valid.return_value.first.return_value = (
             None
         )
-
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1, character_ownership=self.main_ownership_1
         )
-        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
+        # when
+        result = tasks.run_manager_sync(sync_manager.pk)
+        # then
         sync_manager.refresh_from_db()
+        self.assertFalse(result)
         self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
 
     @patch(MODELS_PATH + ".Token")
@@ -283,6 +296,7 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         # then (continued)
         contact = sync_manager.contacts.get(eve_entity_id=3015)
         self.assertEqual(contact.standing, 10.0)
+        self.assertFalse(contact.is_war_target)
 
     @patch(MODELS_PATH + ".Token")
     @patch(MODELS_PATH + ".esi")
@@ -306,6 +320,7 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         # then (continued)
         contact = sync_manager.contacts.get(eve_entity_id=3015)
         self.assertEqual(contact.standing, -10.0)
+        self.assertTrue(contact.is_war_target)
 
     def _run_sync(self, mock_esi, mock_run_character_sync, mock_Token):
         def esi_get_alliances_alliance_id_contacts(*args, **kwargs):
