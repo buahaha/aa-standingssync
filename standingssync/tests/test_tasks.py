@@ -111,6 +111,18 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
             SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
         )
 
+    @patch(MODELS_PATH + ".SyncedCharacter.update")
+    def test_should_abort_when_unexpected_exception_occurs(self, mock_update):
+        # given
+        mock_update.side_effect = RuntimeError
+        # when
+        with self.assertRaises(RuntimeError):
+            tasks.run_character_sync(self.synced_character_2.pk)
+        # then
+        self.assertTrue(
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
+        )
+
     @patch(MODELS_PATH + ".Token")
     def test_delete_sync_character_if_token_invalid(self, mock_Token):
         mock_Token.objects.filter.side_effect = TokenInvalidError()
@@ -285,6 +297,22 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         sync_manager.refresh_from_db()
         self.assertFalse(result)
         self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
+
+    @patch(MODELS_PATH + ".SyncManager.update_from_esi")
+    def test_should_report_error_when_unexpected_exception_occurs(
+        self, mock_update_from_esi, mock_run_character_sync
+    ):
+        # given
+        mock_update_from_esi.side_effect = RuntimeError
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
+        )
+        # when
+        result = tasks.run_manager_sync(sync_manager.pk)
+        # then
+        sync_manager.refresh_from_db()
+        self.assertFalse(result)
+        self.assertEqual(sync_manager.last_error, SyncManager.Error.UNKNOWN)
 
     @patch(MODELS_PATH + ".Token")
     @patch(MODELS_PATH + ".esi")

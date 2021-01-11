@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required, permission_required
+from django.utils.html import format_html
 
 from esi.decorators import token_required
 
@@ -10,10 +11,38 @@ from allianceauth.services.hooks import get_extension_logger
 from . import tasks, __title__
 from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING, STANDINGSSYNC_ADD_WAR_TARGETS
 from .models import SyncManager, SyncedCharacter
-from .utils import LoggerAddTag, messages_plus
+from .utils import LoggerAddTag, messages_plus, create_link_html
 
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+
+
+def create_img_html(src: str, classes: list = None, size: int = None) -> str:
+    classes_str = format_html('class="{}"', (" ".join(classes)) if classes else "")
+    size_html = format_html('width="{}" height="{}"', size, size) if size else ""
+    return format_html('<img {} {} src="{}">', classes_str, size_html, src)
+
+
+def create_icon_plus_name_html(
+    icon_url,
+    name,
+    size: int = 32,
+    avatar: bool = False,
+    url: str = None,
+    text: str = None,
+) -> str:
+    """create HTML to display an icon next to a name. Can also be a link."""
+    name_html = create_link_html(url, name, new_window=False) if url else name
+    if text:
+        name_html = format_html("{}&nbsp;{}", name_html, text)
+
+    return format_html(
+        "{}&nbsp;&nbsp;&nbsp;{}",
+        create_img_html(
+            icon_url, classes=["ra-avatar", "img-circle"] if avatar else [], size=size
+        ),
+        name_html,
+    )
 
 
 @login_required
@@ -37,16 +66,35 @@ def index(request):
     characters_query = SyncedCharacter.objects.select_related(
         "character_ownership__character"
     ).filter(character_ownership__user=request.user)
-    synced_characters = [
-        {
-            "portrait_url": synced_character.character_ownership.character.portrait_url,
-            "name": synced_character.character_ownership.character.character_name,
-            "status_message": synced_character.get_status_message(),
-            "has_error": synced_character.last_error != SyncedCharacter.Error.NONE,
-            "pk": synced_character.pk,
-        }
-        for synced_character in characters_query
-    ]
+    synced_characters = list()
+    for synced_character in characters_query:
+        character = synced_character.character_ownership.character
+        name_html = create_icon_plus_name_html(
+            character.portrait_url(), character.character_name, avatar=True
+        )
+        organization = character.corporation_name
+        if character.alliance_ticker:
+            organization += f" [{character.alliance_ticker}]"
+
+        status_message_raw = synced_character.get_status_message()
+        if status_message_raw.lower() == "ok":
+            status_message = format_html(
+                '<i class="fas fa-check" style="color:green;"></i>'
+            )
+        else:
+            status_message = status_message_raw
+
+        synced_characters.append(
+            {
+                "name": character.character_name,
+                "name_html": name_html,
+                "organization": organization,
+                "status_message": status_message,
+                "has_error": synced_character.last_error != SyncedCharacter.Error.NONE,
+                "pk": synced_character.pk,
+            }
+        )
+
     context = {
         "app_title": __title__,
         "synced_characters": synced_characters,
@@ -113,9 +161,7 @@ def add_alliance_manager(request, token):
         sync_manager, _ = SyncManager.objects.update_or_create(
             alliance=alliance, defaults={"character_ownership": character_ownership}
         )
-        tasks.run_manager_sync.delay(
-            manager_pk=sync_manager.pk, user_pk=request.user.pk
-        )
+        tasks.run_manager_sync.delay(sync_manager.pk)
         messages_plus.success(
             request,
             "{} set as alliance character for {}. "

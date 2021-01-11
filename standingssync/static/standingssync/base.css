@@ -1,7 +1,7 @@
 /* table formatting */
 
-.table thead th {text-align: center; vertical-align: middle}
-.table tbody td {text-align: center; vertical-align: middle}
+.table thead th {vertical-align: middle}
+.table tbody td {vertical-align: middle}
 
 /* Bootstrap callouts */
 

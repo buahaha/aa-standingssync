@@ -98,7 +98,6 @@ class SyncManager(_SyncBaseModel):
 
         Args:
         - force_sync: will ignore version_hash if set to true
-        - user_pk: user to send a completion report to (optional)
 
         Returns:
         - newest version hash on success or None on error

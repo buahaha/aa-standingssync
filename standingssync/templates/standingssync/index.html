@@ -30,25 +30,24 @@
         </div>
         <div class="panel-body">
             {% if has_synced_chars %}
-                <table class="table" id="tab_standingssync">
+                <table class="table table-striped" id="tab_standingssync">
                     <thead>
                         <tr>
-                            <th></th>
                             <th>Name</th>
+                            <th>Organization</th>
                             <th>Status</th>
-                            <th>Remove from Sync</th>
+                            <th>Disable</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for character in synced_characters %}
+                        {% for character in synced_characters|dictsort:"name" %}
                             {% if character.has_error %}
                                 <tr class="danger">
                             {% else %}
                                 <tr>
                             {% endif %}
-                                <td class="text-center"><img class="ra-avatar img-circle" src="{{ character.portrait_url }}">
-                                </td>
-                                <td>{{ character.name }}</td>
+                                <td>{{ character.name_html }}</td>
+                                <td>{{ character.organization }}</td>
                                 <td>{{ character.status_message }}</td>
                                 <td><a class="btn btn-warning" href="{% url 'standingssync:remove_character' character.pk %}" role="button">
                                     <i class="far fa-trash-alt"></i>
@@ -78,22 +77,28 @@
     {% endif %}
 
     {% if alliance_contacts_count != None %}
-        <a id="standingssyncBtnAddSyncChar" class="btn btn-primary" href="{% url 'standingssync:add_character' %}">Add Character to Sync</a>
+        <a id="standingssyncBtnAddSyncChar" class="btn btn-primary" href="{% url 'standingssync:add_character' %}">
+            Add Character to Sync
+        </a>
     {% endif %}
 
     {% if perms.standingssync.add_syncmanager %}
-        <a class="btn btn-default" href="{% url 'standingssync:add_alliance_manager' %}">
-            Set Alliance Character
-        </a>
+        <span class="pull-right">
+            <a class="btn btn-default" href="{% url 'standingssync:add_alliance_manager' %}">
+                Set Alliance Character
+            </a>
+        </span>
     {% endif %}
 
     <div class="bs-callout bs-callout-warning">
         <h4>Read Me First</h4>
-        <p>This app enables you to always have the current alliance standings on your non-alliance characters.
+        <p>This app enables you to always have the current alliance standings on your non-alliance characters.<br>
             Once activated it will automatically replace the personal contacts of your character with
-            the current Alliance contacts and will continue to do so until deactivated.</p>
-            <p>If enabled current war targets will also be added as contacts with -10 standing.</p>
-            <p><strong>Careful!</strong> You will loose all your personal contacts on a synced character, so use with care.</p>
+            the current alliance contacts and will continue to do so until deactivated.</p>
+            {% if alliance_war_targets_count != None %}
+                <p>Further all current war targets of the alliance will be added as contacts with -10 standing.</p>
+            {% endif %}
+            <p><i class="fas fa-exclamation-triangle"></i> You will loose all your personal contacts on a synced character, so use with care.</p>
     </div>
 
 {% endblock %}
