@@ -201,9 +201,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
 
     def test_abort_when_no_char(self):
         sync_manager = SyncManager.objects.create(alliance=self.alliance_1)
-        self.assertFalse(
-            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
-        )
+        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.NO_CHARACTER)
 
@@ -212,9 +210,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1, character_ownership=self.main_ownership_2
         )
-        self.assertFalse(
-            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_2.pk)
-        )
+        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
         sync_manager.refresh_from_db()
         self.assertEqual(
             sync_manager.last_error, SyncManager.Error.INSUFFICIENT_PERMISSIONS
@@ -229,9 +225,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1, character_ownership=self.main_ownership_1
         )
-        self.assertFalse(
-            tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk)
-        )
+        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
 
@@ -259,7 +253,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         )
 
         # run manager sync
-        self.assertTrue(tasks.run_manager_sync(sync_manager.pk, user_pk=self.user_1.pk))
+        self.assertTrue(tasks.run_manager_sync(sync_manager.pk))
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.NONE)
 

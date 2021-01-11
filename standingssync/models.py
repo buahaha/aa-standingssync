@@ -1,5 +1,6 @@
 import hashlib
 import json
+from typing import Optional
 
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
@@ -95,7 +96,7 @@ class SyncManager(_SyncBaseModel):
 
         return contact_found.standing if contact_found is not None else 0.0
 
-    def update_from_esi(self, force_sync: bool = False) -> bool:
+    def update_from_esi(self, force_sync: bool = False) -> Optional[str]:
         """Update this sync manager from ESi
 
         Args:
@@ -103,12 +104,12 @@ class SyncManager(_SyncBaseModel):
         - user_pk: user to send a completion report to (optional)
 
         Returns:
-        - True on success or False on error
+        - newest version hash on success or None on error
         """
         if self.character_ownership is None:
             logger.error("%s: No character configured to sync the alliance", self)
             self.set_sync_status(self.Error.NO_CHARACTER)
-            raise ValueError()
+            return None
 
         # abort if character does not have sufficient permissions
         if not self.character_ownership.user.has_perm("standingssync.add_syncmanager"):
@@ -118,7 +119,7 @@ class SyncManager(_SyncBaseModel):
                 self,
             )
             self.set_sync_status(self.Error.INSUFFICIENT_PERMISSIONS)
-            raise ValueError()
+            return None
 
         try:
             # get token
@@ -135,29 +136,19 @@ class SyncManager(_SyncBaseModel):
         except TokenInvalidError:
             logger.error("%s: Invalid token for fetching alliance contacts", self)
             self.set_sync_status(self.Error.TOKEN_INVALID)
-            raise TokenInvalidError()
+            return None
 
         except TokenExpiredError:
             self.set_sync_status(self.Error.TOKEN_EXPIRED)
-            raise TokenExpiredError()
+            return None
 
         else:
             if not token:
                 self.set_sync_status(self.Error.TOKEN_INVALID)
-                raise TokenInvalidError()
+                return None
 
-        try:
-            new_version_hash = self._perform_update_from_esi(token, force_sync)
-            self.set_sync_status(self.Error.NONE)
-        except Exception as ex:
-            logger.error(
-                "%s An unexpected error ocurred while trying to sync alliance",
-                self,
-                exc_info=True,
-            )
-            self.set_sync_status(self.Error.UNKNOWN)
-            raise ex()
-
+        new_version_hash = self._perform_update_from_esi(token, force_sync)
+        self.set_sync_status(self.Error.NONE)
         return new_version_hash
 
     def _perform_update_from_esi(self, token, force_sync) -> str:

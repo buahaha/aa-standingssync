@@ -1,18 +1,56 @@
 from celery import shared_task
 
-from django.contrib.auth.models import User
-
-from allianceauth.notifications import notify
 from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
 
 from .models import SyncManager, SyncedCharacter, EveWar
 from .providers import esi
-from .utils import LoggerAddTag, make_logger_prefix
+from .utils import LoggerAddTag
 
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+
+
+@shared_task
+def run_regular_sync():
+    """syncs all managers and related characters if needed"""
+    for sync_manager_pk in SyncManager.objects.values_list("pk", flat=True):
+        run_manager_sync.delay(sync_manager_pk)
+
+
+@shared_task
+def run_manager_sync(manager_pk: int, force_sync: bool = False) -> bool:
+    """updates contacts for given manager and related characters
+
+    Args:
+    - manage_pk: primary key of sync manager to run sync for
+    - force_sync: will ignore version_hash if set to true
+
+    Returns:
+    - True on success or False on error
+    """
+
+    sync_manager = SyncManager.objects.get(pk=manager_pk)
+    try:
+        new_version_hash = sync_manager.update_from_esi(force_sync)
+    except Exception:
+        logger.debug("Unexpected exception occurred", exc_info=True)
+        sync_manager.set_sync_status(sync_manager.Error.UNKNOWN)
+        return False
+
+    if not new_version_hash:
+        return False
+
+    alts_need_syncing = (
+        SyncedCharacter.objects.filter(manager=sync_manager)
+        .exclude(version_hash=new_version_hash)
+        .values_list("pk", flat=True)
+    )
+    for character_pk in alts_need_syncing:
+        run_character_sync.delay(character_pk)
+
+    return True
 
 
 @shared_task
@@ -24,7 +62,7 @@ def run_character_sync(sync_char_pk: int, force_sync: bool = False) -> bool:
     - force_sync: will ignore version_hash if set to true
 
     Returns:
-    - False if the sync character was deleted, True otherwise
+    - False if sync failed and the sync character was deleted, True otherwise
     """
 
     synced_character = SyncedCharacter.objects.get(pk=sync_char_pk)
@@ -34,77 +72,6 @@ def run_character_sync(sync_char_pk: int, force_sync: bool = False) -> bool:
         logger.error("An unexpected error ocurred: %s", ex, exc_info=True)
         synced_character.set_sync_status(SyncedCharacter.Error.UNKNOWN)
         raise ex
-
-
-@shared_task
-def run_manager_sync(
-    manager_pk: int, force_sync: bool = False, user_pk: int = None
-) -> bool:
-    """updates contacts for given manager and related characters
-
-    Args:
-    - manage_pk: primary key of sync manager to run sync for
-    - force_sync: will ignore version_hash if set to true
-    - user_pk: user to send a completion report to (optional)
-
-    Returns:
-    - True on success or False on error
-    """
-
-    sync_manager = SyncManager.objects.get(pk=manager_pk)
-    addTag = make_logger_prefix(sync_manager)
-    try:
-        new_version_hash = sync_manager.update_from_esi(force_sync)
-        alts_need_syncing = (
-            SyncedCharacter.objects.filter(manager=sync_manager)
-            .exclude(version_hash=new_version_hash)
-            .values_list("pk", flat=True)
-        )
-        for character_pk in alts_need_syncing:
-            run_character_sync.delay(character_pk)
-
-    except Exception:
-        logger.debug("Unexpected exception occurred", exc_info=True)
-        success = False
-    else:
-        success = True
-
-    if user_pk:
-        try:
-            message = 'Syncing of alliance contacts for "{}" {}.\n'.format(
-                sync_manager.alliance,
-                "completed successfully" if success else "has failed",
-            )
-            if success:
-                message += "{:,} contacts synced.".format(
-                    sync_manager.alliancecontact_set.count()
-                )
-
-            notify(
-                user=User.objects.get(pk=user_pk),
-                title="Standings Sync: Alliance sync for {}: {}".format(
-                    sync_manager.alliance, "OK" if success else "FAILED"
-                ),
-                message=message,
-                level="success" if success else "danger",
-            )
-        except Exception as ex:
-            logger.error(
-                addTag(
-                    "An unexpected error ocurred while trying to "
-                    f"report to user: {ex}"
-                ),
-                exc_info=True,
-            )
-
-    return success
-
-
-@shared_task
-def run_regular_sync():
-    """syncs all managers and related characters if needed"""
-    for sync_manager_pk in SyncManager.objects.values_list("pk", flat=True):
-        run_manager_sync.delay(sync_manager_pk)
 
 
 @shared_task

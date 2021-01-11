@@ -77,10 +77,7 @@ def add_alliance_manager(request, token):
     if not token_char.alliance_id:
         messages_plus.warning(
             request,
-            (
-                "Can not add {}, because it is not a member "
-                "of any alliance. ".format(token_char)
-            ),
+            f"Can not add {token_char}, because it is not a member of any alliance.",
         )
         success = False
 
@@ -91,7 +88,7 @@ def add_alliance_manager(request, token):
             )
         except CharacterOwnership.DoesNotExist:
             messages_plus.warning(
-                request, "Could not find character {}".format(token_char.character_name)
+                request, f"Could not find character {token_char.character_name}"
             )
             success = False
 
@@ -112,8 +109,7 @@ def add_alliance_manager(request, token):
         messages_plus.success(
             request,
             "{} set as alliance character for {}. "
-            "Started syncing of alliance contacts. "
-            "You will receive a report once it is completed.".format(
+            "Started syncing of alliance contacts. ".format(
                 sync_manager.character_ownership.character.character_name,
                 alliance.alliance_name,
             ),

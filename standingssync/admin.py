@@ -92,8 +92,6 @@ class SyncManagerAdmin(admin.ModelAdmin):
             names.append(str(obj))
 
         text = "Started syncing for: {} ".format(", ".join(names))
-        text += "You will receive a report once it is completed."
-
         self.message_user(request, text)
 
     start_sync_managers.short_description = "Sync selected managers"
