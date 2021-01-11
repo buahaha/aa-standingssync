@@ -15,7 +15,7 @@ from allianceauth.notifications import notify
 from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
-from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
+from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING, STANDINGSSYNC_ADD_WAR_TARGETS
 from .managers import (
     AllianceContactManager,
     EveEntityManager,
@@ -78,17 +78,18 @@ class SyncManager(_SyncBaseModel):
     def get_effective_standing(self, character: EveCharacter) -> float:
         """return the effective standing with this alliance"""
 
-        contacts = AllianceContact.objects.filter(manager=self).select_related()
         contact_found = None
         try:
-            contact_found = contacts.get(contact_id=int(character.character_id))
+            contact_found = self.contacts.get(contact_id=int(character.character_id))
         except AllianceContact.DoesNotExist:
             try:
-                contact_found = contacts.get(contact_id=int(character.corporation_id))
+                contact_found = self.contacts.get(
+                    contact_id=int(character.corporation_id)
+                )
             except AllianceContact.DoesNotExist:
                 if character.alliance_id:
                     try:
-                        contact_found = contacts.get(
+                        contact_found = self.contacts.get(
                             contact_id=int(character.alliance_id)
                         )
                     except AllianceContact.DoesNotExist:
@@ -171,7 +172,7 @@ class SyncManager(_SyncBaseModel):
                 "standing": 10,
             }
             with transaction.atomic():
-                AllianceContact.objects.filter(manager=self).delete()
+                self.contacts.all().delete()
                 # TODO: Change to bulk create
                 for contact_id, contact in contacts_unique.items():
                     AllianceContact.objects.create(
@@ -206,7 +207,9 @@ class SyncedCharacter(_SyncBaseModel):
     character_ownership = models.OneToOneField(
         CharacterOwnership, on_delete=models.CASCADE, primary_key=True
     )
-    manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
+    manager = models.ForeignKey(
+        SyncManager, on_delete=models.CASCADE, related_name="synced_characters"
+    )
     last_error = models.IntegerField(choices=Error.choices, default=Error.NONE)
 
     def __str__(self):
@@ -369,7 +372,9 @@ class SyncedCharacter(_SyncBaseModel):
 class AllianceContact(models.Model):
     """An alliance contact with standing"""
 
-    manager = models.ForeignKey(SyncManager, on_delete=models.CASCADE)
+    manager = models.ForeignKey(
+        SyncManager, on_delete=models.CASCADE, related_name="contacts"
+    )
     contact_id = models.PositiveIntegerField(db_index=True)
     contact_type = models.CharField(max_length=32)
     standing = models.FloatField()

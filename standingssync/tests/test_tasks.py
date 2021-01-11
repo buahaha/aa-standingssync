@@ -1,4 +1,7 @@
+import datetime as dt
 from unittest.mock import Mock, patch
+
+from django.utils.timezone import now
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.tests.auth_utils import AuthUtils
@@ -6,9 +9,22 @@ from allianceauth.tests.auth_utils import AuthUtils
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 
-from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
+from . import (
+    create_test_user,
+    LoadTestDataMixin,
+    ESI_CONTACTS,
+    BravadoOperationStub,
+    esi_alliance_info,
+)
+
 from .. import tasks
-from ..models import SyncManager, SyncedCharacter, AllianceContact
+from ..models import (
+    SyncManager,
+    SyncedCharacter,
+    AllianceContact,
+    EveWar,
+    EveWarProtagonist,
+)
 from ..utils import NoSocketsTestCase, generate_invalid_pk
 
 
@@ -181,7 +197,7 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         cls.main_ownership_1 = CharacterOwnership.objects.get(
             character=cls.character_1, user=cls.user_1
         )
-        AuthUtils.add_permission_to_user_by_name(
+        cls.user_1 = AuthUtils.add_permission_to_user_by_name(
             "standingssync.add_syncmanager", cls.user_1
         )
 
@@ -229,19 +245,58 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
 
-    # normal synch of new contacts
     @patch(MODELS_PATH + ".Token")
     @patch(TASKS_PATH + ".run_character_sync")
     @patch(MODELS_PATH + ".esi")
-    def test_run_sync_normal(self, mock_esi, mock_run_character_sync, mock_Token):
+    def test_should_sync_contacts(self, mock_esi, mock_run_character_sync, mock_Token):
+        # given
+        with patch(MODELS_PATH + ".STANDINGSSYNC_ADD_WAR_TARGETS", False):
+            # when
+            sync_manager = self._run_sync(mock_esi, mock_run_character_sync, mock_Token)
+        # then (continued)
+        contact = sync_manager.contacts.get(contact_id=3015)
+        self.assertEqual(contact.standing, 10.0)
+
+    """
+    @patch(MODELS_PATH + ".Token")
+    @patch(TASKS_PATH + ".run_character_sync")
+    @patch(MODELS_PATH + ".esi")
+    def test_should_sync_contacts_and_war_targets(
+        self, mock_esi, mock_run_character_sync, mock_Token
+    ):
+        # given
+        aggressor = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3015)
+        )
+        defender = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3001)
+        )
+        EveWar.objects.create(
+            id=8,
+            aggressor=aggressor,
+            defender=defender,
+            declared=now() - dt.timedelta(days=3),
+            started=now() - dt.timedelta(days=2),
+            is_mutual=False,
+            is_open_for_allies=False,
+        )
+
+        with patch(MODELS_PATH + ".STANDINGSSYNC_ADD_WAR_TARGETS", True):
+            # when
+            sync_manager = self._run_sync(mock_esi, mock_run_character_sync, mock_Token)
+        # then (continued)
+        contact = sync_manager.contacts.get(contact_id=3015)
+        self.assertEqual(contact.standing, -10.0)
+    """
+
+    def _run_sync(self, mock_esi, mock_run_character_sync, mock_Token):
         def esi_get_alliances_alliance_id_contacts(*args, **kwargs):
             return BravadoOperationStub(ESI_CONTACTS)
 
+        # given
         mock_esi.client.Contacts.get_alliances_alliance_id_contacts.side_effect = (
             esi_get_alliances_alliance_id_contacts
         )
-        mock_run_character_sync.delay = Mock()
-
         mock_Token.objects.filter.return_value.require_scopes.return_value.require_valid.return_value.first.return_value = Mock(
             spec=Token
         )
@@ -251,21 +306,20 @@ class TestManagerSync(LoadTestDataMixin, NoSocketsTestCase):
         SyncedCharacter.objects.create(
             character_ownership=self.alt_ownership, manager=sync_manager
         )
-
-        # run manager sync
-        self.assertTrue(tasks.run_manager_sync(sync_manager.pk))
+        # when
+        result = tasks.run_manager_sync(sync_manager.pk)
+        # then
+        self.assertTrue(result)
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.NONE)
-
-        # check results
-        base_contact_ids = {x["contact_id"] for x in ESI_CONTACTS}
-        base_contact_ids.add(self.character_1.alliance_id)
-
-        alliance_contact_ids = {
-            x.contact_id for x in AllianceContact.objects.filter(manager=sync_manager)
-        }
-
-        self.assertSetEqual(base_contact_ids, alliance_contact_ids)
+        expected_contact_ids = {x["contact_id"] for x in ESI_CONTACTS}
+        expected_contact_ids.add(self.character_1.alliance_id)
+        result_contact_ids = set(
+            sync_manager.contacts.values_list("contact_id", flat=True)
+        )
+        self.assertSetEqual(expected_contact_ids, result_contact_ids)
+        self.assertTrue(mock_run_character_sync.delay.called)
+        return sync_manager
 
     # normal synch of new contacts
     @patch(TASKS_PATH + ".run_manager_sync")

@@ -9,7 +9,7 @@ from allianceauth.services.hooks import get_extension_logger
 
 from . import tasks, __title__
 from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING
-from .models import SyncManager, SyncedCharacter, AllianceContact
+from .models import SyncManager, SyncedCharacter
 from .utils import LoggerAddTag, messages_plus
 
 
@@ -54,9 +54,7 @@ def index(request):
     }
     if sync_manager is not None:
         context["alliance"] = sync_manager.alliance
-        context["alliance_contacts_count"] = AllianceContact.objects.filter(
-            manager=sync_manager
-        ).count()
+        context["alliance_contacts_count"] = sync_manager.contacts.count()
     else:
         context["alliance"] = None
         context["alliance_contacts_count"] = None

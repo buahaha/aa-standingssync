@@ -62,6 +62,14 @@ ESI_CONTACTS = [
 ESI_CONTACTS_BY_ID = {int(x["contact_id"]): x for x in ESI_CONTACTS}
 
 
+def esi_alliance_info(id):
+    return {
+        "alliance_id": id,
+        "isk_destroyed": 0,
+        "ships_killed": 0,
+    }
+
+
 def create_eve_entities():
     for obj in EveAllianceInfo.objects.all():
         EveEntity.objects.create(

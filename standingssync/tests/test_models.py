@@ -6,7 +6,13 @@ from django.utils.timezone import now
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveCharacter
 
-from . import LoadTestDataMixin, create_test_user, ESI_CONTACTS, BravadoOperationStub
+from . import (
+    LoadTestDataMixin,
+    create_test_user,
+    ESI_CONTACTS,
+    BravadoOperationStub,
+    esi_alliance_info,
+)
 from ..models import (
     SyncManager,
     AllianceContact,
@@ -288,14 +294,6 @@ class TestEveEntityManagerGetOrCreateFromEsiInfo(NoSocketsTestCase):
         self.assertEqual(obj.category, EveEntity.Category.ALLIANCE)
 
 
-def alliance_info(id):
-    return {
-        "alliance_id": id,
-        "isk_destroyed": 0,
-        "ships_killed": 0,
-    }
-
-
 class TestEveWarProtagonistManager(NoSocketsTestCase):
     def test_should_return_newly_created_protagonist(self):
         # given
@@ -315,8 +313,12 @@ class TestEveWarProtagonistManager(NoSocketsTestCase):
 class TestEveWarManagerManagerActiveWars(NoSocketsTestCase):
     def test_should_return_started_war(self):
         # given
-        aggressor = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3011))
-        defender = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3001))
+        aggressor = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3011)
+        )
+        defender = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3001)
+        )
         EveWar.objects.create(
             id=8,
             aggressor=aggressor,
@@ -334,8 +336,12 @@ class TestEveWarManagerManagerActiveWars(NoSocketsTestCase):
 
     def test_should_return_war_about_to_finish(self):
         # given
-        aggressor = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3011))
-        defender = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3001))
+        aggressor = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3011)
+        )
+        defender = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3001)
+        )
         EveWar.objects.create(
             id=8,
             aggressor=aggressor,
@@ -354,8 +360,12 @@ class TestEveWarManagerManagerActiveWars(NoSocketsTestCase):
 
     def test_should_not_return_finished_war(self):
         # given
-        aggressor = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3011))
-        defender = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3001))
+        aggressor = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3011)
+        )
+        defender = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3001)
+        )
         EveWar.objects.create(
             id=8,
             aggressor=aggressor,
@@ -373,8 +383,12 @@ class TestEveWarManagerManagerActiveWars(NoSocketsTestCase):
 
     def test_should_not_return_war_not_yet_started(self):
         # given
-        aggressor = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3011))
-        defender = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3001))
+        aggressor = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3011)
+        )
+        defender = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3001)
+        )
         EveWar.objects.create(
             id=8,
             aggressor=aggressor,
@@ -395,8 +409,12 @@ class TestEveWarManager(LoadTestDataMixin, NoSocketsTestCase):
     def setUpClass(cls):
         super().setUpClass()
         # given
-        aggressor = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3011))
-        defender = EveWarProtagonist.objects.create_from_esi_info(alliance_info(3001))
+        aggressor = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3011)
+        )
+        defender = EveWarProtagonist.objects.create_from_esi_info(
+            esi_alliance_info(3001)
+        )
         war = EveWar.objects.create(
             id=8,
             aggressor=aggressor,
@@ -431,10 +449,10 @@ class TestEveWarManager(LoadTestDataMixin, NoSocketsTestCase):
         EveWar.objects.create(
             id=1,
             aggressor=EveWarProtagonist.objects.create_from_esi_info(
-                alliance_info(3011)
+                esi_alliance_info(3011)
             ),
             defender=EveWarProtagonist.objects.create_from_esi_info(
-                alliance_info(3001)
+                esi_alliance_info(3001)
             ),
             declared=now() - dt.timedelta(days=3),
             started=now() - dt.timedelta(days=2),
@@ -444,10 +462,10 @@ class TestEveWarManager(LoadTestDataMixin, NoSocketsTestCase):
         EveWar.objects.create(
             id=2,
             aggressor=EveWarProtagonist.objects.create_from_esi_info(
-                alliance_info(3011)
+                esi_alliance_info(3011)
             ),
             defender=EveWarProtagonist.objects.create_from_esi_info(
-                alliance_info(3001)
+                esi_alliance_info(3001)
             ),
             declared=now() - dt.timedelta(days=3),
             started=now() - dt.timedelta(days=2),
@@ -458,10 +476,10 @@ class TestEveWarManager(LoadTestDataMixin, NoSocketsTestCase):
         EveWar.objects.create(
             id=3,
             aggressor=EveWarProtagonist.objects.create_from_esi_info(
-                alliance_info(3011)
+                esi_alliance_info(3011)
             ),
             defender=EveWarProtagonist.objects.create_from_esi_info(
-                alliance_info(3001)
+                esi_alliance_info(3001)
             ),
             declared=now() - dt.timedelta(days=3),
             started=now() - dt.timedelta(days=2),

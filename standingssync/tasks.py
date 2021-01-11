@@ -42,11 +42,9 @@ def run_manager_sync(manager_pk: int, force_sync: bool = False) -> bool:
     if not new_version_hash:
         return False
 
-    alts_need_syncing = (
-        SyncedCharacter.objects.filter(manager=sync_manager)
-        .exclude(version_hash=new_version_hash)
-        .values_list("pk", flat=True)
-    )
+    alts_need_syncing = sync_manager.synced_characters.exclude(
+        version_hash=new_version_hash
+    ).values_list("pk", flat=True)
     for character_pk in alts_need_syncing:
         run_character_sync.delay(character_pk)
 
