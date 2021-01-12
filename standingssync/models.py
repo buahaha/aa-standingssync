@@ -325,11 +325,11 @@ class SyncedCharacter(_SyncBaseModel):
 
         logger.info("%s: Updating contacts with new version", self)
         character_id = self.character_ownership.character.character_id
-        # get current contacts
+        logger.debug("%s: Fetch current contacts", self)
         character_contacts = esi.client.Contacts.get_characters_character_id_contacts(
             token=token.valid_access_token(), character_id=character_id
         ).results()
-        # delete all current contacts
+        logger.debug("%s: Delete current contacts", self)
         max_items = 20
         contact_ids_chunks = chunks(
             [x["contact_id"] for x in character_contacts], max_items
@@ -339,9 +339,9 @@ class SyncedCharacter(_SyncBaseModel):
                 token=token.valid_access_token(),
                 character_id=character_id,
                 contact_ids=contact_ids_chunk,
-            )
+            ).results()
 
-        # write alliance contacts to ESI
+        logger.debug("%s: Write alliance contacts", self)
         contacts_by_standing = EveContact.objects.grouped_by_standing(
             sync_manager=self.manager
         )
@@ -357,7 +357,7 @@ class SyncedCharacter(_SyncBaseModel):
                     character_id=character_id,
                     contact_ids=contact_ids_chunk,
                     standing=standing,
-                )
+                ).results()
 
         # store updated version hash with character
         self.version_hash = self.manager.version_hash
