@@ -1,10 +1,14 @@
 import datetime as dt
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from django.utils.timezone import now
 
+from esi.errors import TokenExpiredError, TokenInvalidError
+
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveCharacter
+from allianceauth.tests.auth_utils import AuthUtils
+
 
 from . import LoadTestDataMixin, create_test_user, ESI_CONTACTS, BravadoOperationStub
 from ..models import (
@@ -166,10 +170,12 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         cls.main_ownership_1 = CharacterOwnership.objects.get(
             character=cls.character_1, user=cls.user_1
         )
-        cls.alt_ownership = CharacterOwnership.objects.create(
+        cls.alt_ownership_2 = CharacterOwnership.objects.create(
             character=cls.character_2, owner_hash="x2", user=cls.user_1
         )
-
+        cls.alt_ownership_3 = CharacterOwnership.objects.create(
+            character=cls.character_3, owner_hash="x3", user=cls.user_1
+        )
         # sync manager with contacts
         cls.sync_manager = SyncManager.objects.create(
             alliance=cls.alliance_1,
@@ -177,42 +183,184 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
             version_hash="new",
         )
 
-        # sync char
-        cls.synced_character = SyncedCharacter.objects.create(
-            character_ownership=cls.alt_ownership, manager=cls.sync_manager
+    def setUp(self) -> None:
+        self.maxDiff = None
+        self.sync_manager.contacts.all().delete()
+        for contact in ESI_CONTACTS:
+            EveContact.objects.create(
+                manager=self.sync_manager,
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
+                standing=contact["standing"],
+                is_war_target=False,
+            )
+
+        self.synced_character_2 = SyncedCharacter.objects.create(
+            character_ownership=self.alt_ownership_2, manager=self.sync_manager
+        )
+        self.synced_character_3 = SyncedCharacter.objects.create(
+            character_ownership=self.alt_ownership_3, manager=self.sync_manager
         )
 
     def test_get_last_error_message_after_sync(self):
-        self.synced_character.last_sync = now()
-        self.synced_character.last_error = SyncedCharacter.Error.NONE
+        self.synced_character_2.last_sync = now()
+        self.synced_character_2.last_error = SyncedCharacter.Error.NONE
         expected = "OK"
-        self.assertEqual(self.synced_character.get_status_message(), expected)
+        self.assertEqual(self.synced_character_2.get_status_message(), expected)
 
-        self.synced_character.last_error = SyncedCharacter.Error.TOKEN_EXPIRED
+        self.synced_character_2.last_error = SyncedCharacter.Error.TOKEN_EXPIRED
         expected = "Expired token"
-        self.assertEqual(self.synced_character.get_status_message(), expected)
+        self.assertEqual(self.synced_character_2.get_status_message(), expected)
 
     def test_get_last_error_message_no_sync(self):
-        self.synced_character.last_sync = None
-        self.synced_character.last_error = SyncedCharacter.Error.NONE
+        self.synced_character_2.last_sync = None
+        self.synced_character_2.last_error = SyncedCharacter.Error.NONE
         expected = "Not synced yet"
-        self.assertEqual(self.synced_character.get_status_message(), expected)
+        self.assertEqual(self.synced_character_2.get_status_message(), expected)
 
-        self.synced_character.last_error = SyncedCharacter.Error.TOKEN_EXPIRED
+        self.synced_character_2.last_error = SyncedCharacter.Error.TOKEN_EXPIRED
         expected = "Expired token"
-        self.assertEqual(self.synced_character.get_status_message(), expected)
+        self.assertEqual(self.synced_character_2.get_status_message(), expected)
 
     def test_set_sync_status(self):
-        self.synced_character.last_error = SyncManager.Error.NONE
-        self.synced_character.last_sync = None
+        self.synced_character_2.last_error = SyncManager.Error.NONE
+        self.synced_character_2.last_sync = None
 
-        self.synced_character.set_sync_status(SyncManager.Error.TOKEN_INVALID)
-        self.synced_character.refresh_from_db()
+        self.synced_character_2.set_sync_status(SyncManager.Error.TOKEN_INVALID)
+        self.synced_character_2.refresh_from_db()
 
         self.assertEqual(
-            self.synced_character.last_error, SyncManager.Error.TOKEN_INVALID
+            self.synced_character_2.last_error, SyncManager.Error.TOKEN_INVALID
         )
-        self.assertIsNotNone(self.synced_character.last_sync)
+        self.assertIsNotNone(self.synced_character_2.last_sync)
+
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
+    @patch(MODELS_PATH + ".Token")
+    @patch(MODELS_PATH + ".esi")
+    def test_should_sync_all_contacts_1(self, mock_esi, mock_Token):
+        """run normal sync for a character which has blue standing"""
+        # when
+        result, character_contacts = self._run_sync(
+            mock_esi, mock_Token, self.synced_character_2
+        )
+        # then
+        self.assertTrue(result)
+        self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
+        # self.assertEqual(mock_delete_result.result.call_count, 1)
+        expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
+        self.assertDictEqual(character_contacts, expected)
+
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
+    @patch(MODELS_PATH + ".Token")
+    @patch(MODELS_PATH + ".esi")
+    def test_should_sync_all_contacts_2(self, mock_esi, mock_Token):
+        """run normal sync for a character which has no standing and allow neutrals"""
+        # when
+        result, character_contacts = self._run_sync(
+            mock_esi, mock_Token, self.synced_character_3
+        )
+        # then
+        self.assertTrue(result)
+        self.assertEqual(self.synced_character_3.last_error, SyncedCharacter.Error.NONE)
+        # self.assertEqual(mock_delete_result.result.call_count, 1)
+        expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
+        self.assertDictEqual(character_contacts, expected)
+
+    def _run_sync(self, mock_esi, mock_Token, synced_character):
+        character_id = int(synced_character.character_ownership.character.character_id)
+        characters_contacts = {character_id: dict()}
+
+        def esi_get_characters_character_id_contacts(*args, **kwargs):
+            return BravadoOperationStub(ESI_CONTACTS)
+
+        def esi_post_characters_character_id_contacts(
+            character_id, contact_ids, standing, token
+        ):
+            for contact_id in contact_ids:
+                characters_contacts[int(character_id)][int(contact_id)] = standing
+
+            return BravadoOperationStub([])
+
+        # given
+        mock_esi.client.Contacts.get_characters_character_id_contacts.side_effect = (
+            esi_get_characters_character_id_contacts
+        )
+        mock_esi.client.Contacts.delete_characters_character_id_contacts.return_value = BravadoOperationStub(
+            []
+        )
+        mock_esi.client.Contacts.post_characters_character_id_contacts = (
+            esi_post_characters_character_id_contacts
+        )
+        mock_Token.objects.filter = Mock()
+        synced_character.character_ownership.user = (
+            AuthUtils.add_permission_to_user_by_name(
+                "standingssync.add_syncedcharacter",
+                synced_character.character_ownership.user,
+            )
+        )
+        # when
+        result = synced_character.update()
+        synced_character.refresh_from_db()
+        return result, characters_contacts[character_id]
+
+    def test_should_deactivate_when_insufficient_permission(self):
+        # when
+        result = self.synced_character_2.update()
+        # then
+        self.assertFalse(result)
+        self.assertFalse(
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
+        )
+
+    @patch(MODELS_PATH + ".Token")
+    def test_should_deactivate_when_token_is_invalid(self, mock_Token):
+        # given
+        mock_Token.objects.filter.side_effect = TokenInvalidError()
+        AuthUtils.add_permission_to_user_by_name(
+            "standingssync.add_syncedcharacter", self.user_1
+        )
+        # when
+        result = self.synced_character_2.update()
+        # then
+        self.assertFalse(result)
+        self.assertFalse(
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
+        )
+
+    @patch(MODELS_PATH + ".Token")
+    def test_should_deactivate_when_token_is_expired(self, mock_Token):
+        # given
+        mock_Token.objects.filter.side_effect = TokenExpiredError()
+        AuthUtils.add_permission_to_user_by_name(
+            "standingssync.add_syncedcharacter", self.user_1
+        )
+        # when
+        result = self.synced_character_2.update()
+        # then
+        self.assertFalse(result)
+        self.assertFalse(
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
+        )
+
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
+    @patch(MODELS_PATH + ".Token")
+    def test_should_deactivate_when_character_has_no_standing(self, mock_Token):
+        # given
+        mock_Token.objects.filter.return_value = Mock()
+        AuthUtils.add_permission_to_user_by_name(
+            "standingssync.add_syncedcharacter", self.user_1
+        )
+        contact = self.sync_manager.contacts.get(
+            eve_entity_id=self.character_2.character_id
+        )
+        contact.standing = -10
+        contact.save()
+        # when
+        result = self.synced_character_2.update()
+        # then
+        self.assertFalse(result)
+        self.assertFalse(
+            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
+        )
 
 
 class TestEveContactManager(LoadTestDataMixin, NoSocketsTestCase):

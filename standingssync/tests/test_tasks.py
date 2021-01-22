@@ -4,11 +4,11 @@ from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils.timezone import now
 
-from allianceauth.authentication.models import CharacterOwnership
-from allianceauth.tests.auth_utils import AuthUtils
-
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
+
+from allianceauth.authentication.models import CharacterOwnership
+from allianceauth.tests.auth_utils import AuthUtils
 
 from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
 
@@ -104,126 +104,15 @@ class TestCharacterSync(LoadTestDataMixin, NoSocketsTestCase):
         with self.assertRaises(SyncedCharacter.DoesNotExist):
             tasks.run_character_sync(generate_invalid_pk(SyncedCharacter))
 
-    def test_delete_sync_character_if_insufficient_permission(self):
-        self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
-        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
-        self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
-        )
-
-    @patch(MODELS_PATH + ".SyncedCharacter.update")
-    def test_should_abort_when_unexpected_exception_occurs(self, mock_update):
+    @patch(TASKS_PATH + ".SyncedCharacter.update")
+    def test_should_call_update(self, mock_update):
         # given
-        mock_update.side_effect = RuntimeError
+        mock_update.return_value = True
         # when
-        with self.assertRaises(RuntimeError):
-            tasks.run_character_sync(self.synced_character_2.pk)
+        result = tasks.run_character_sync(self.synced_character_2)
         # then
-        self.assertTrue(
-            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
-        )
-
-    @patch(MODELS_PATH + ".Token")
-    def test_delete_sync_character_if_token_invalid(self, mock_Token):
-        mock_Token.objects.filter.side_effect = TokenInvalidError()
-        AuthUtils.add_permission_to_user_by_name(
-            "standingssync.add_syncedcharacter", self.user_1
-        )
-        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
-        self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
-        )
-
-    @patch(MODELS_PATH + ".Token")
-    def test_delete_sync_character_if_token_expired(self, mock_Token):
-        mock_Token.objects.filter.side_effect = TokenExpiredError()
-        AuthUtils.add_permission_to_user_by_name(
-            "standingssync.add_syncedcharacter", self.user_1
-        )
-        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
-        self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
-        )
-
-    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
-    @patch(MODELS_PATH + ".Token")
-    def test_delete_sync_character_if_no_longer_blue(self, mock_Token):
-        mock_Token.objects.filter.return_value = Mock()
-        AuthUtils.add_permission_to_user_by_name(
-            "standingssync.add_syncedcharacter", self.user_1
-        )
-        # set standing for sync contact to non blue
-        contact = self.sync_manager.contacts.get(
-            eve_entity_id=self.character_2.character_id
-        )
-        contact.standing = -10
-        contact.save()
-
-        # run tests
-        self.assertFalse(tasks.run_character_sync(self.synced_character_2.pk))
-
-        self.assertFalse(
-            SyncedCharacter.objects.filter(pk=self.synced_character_2.pk).exists()
-        )
-        # reset standing
-        contact.standing = 10
-        contact.save()
-
-    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
-    @patch(MODELS_PATH + ".Token")
-    @patch(MODELS_PATH + ".esi")
-    def test_normal_sync_1(self, mock_esi, mock_Token):
-        """run normal sync for a character which has blue standing"""
-        self._run_sync(mock_esi, mock_Token, self.synced_character_2)
-
-    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
-    @patch(MODELS_PATH + ".Token")
-    @patch(MODELS_PATH + ".esi")
-    def test_normal_sync_2(self, mock_esi, mock_Token):
-        """run normal sync for a character which has no standing and allow neutrals"""
-        self._run_sync(mock_esi, mock_Token, self.synced_character_3)
-
-    def _run_sync(self, mock_esi, mock_Token, synced_character):
-        character_id = int(synced_character.character_ownership.character.character_id)
-        characters_contacts = {character_id: dict()}
-
-        def esi_get_characters_character_id_contacts(*args, **kwargs):
-            return BravadoOperationStub(ESI_CONTACTS)
-
-        def esi_post_characters_character_id_contacts(
-            character_id, contact_ids, standing, token
-        ):
-            for contact_id in contact_ids:
-                characters_contacts[int(character_id)][int(contact_id)] = standing
-
-            return BravadoOperationStub([])
-
-        mock_esi.client.Contacts.get_characters_character_id_contacts.side_effect = (
-            esi_get_characters_character_id_contacts
-        )
-        mock_esi.client.Contacts.delete_characters_character_id_contacts.return_value = BravadoOperationStub(
-            []
-        )
-        mock_esi.client.Contacts.post_characters_character_id_contacts = (
-            esi_post_characters_character_id_contacts
-        )
-
-        # combine sub mocks into patch mock
-        mock_Token.objects.filter = Mock()
-        AuthUtils.add_permission_to_user_by_name(
-            "standingssync.add_syncedcharacter", self.user_1
-        )
-
-        # run tests
-        self.assertTrue(tasks.run_character_sync(synced_character.pk))
-
-        # check results
-        synced_character.refresh_from_db()
-        self.assertEqual(synced_character.last_error, SyncedCharacter.Error.NONE)
-        # self.assertEqual(mock_delete_result.result.call_count, 1)
-        self.maxDiff = None
-        expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
-        self.assertDictEqual(characters_contacts[character_id], expected)
+        self.assertTrue(result)
+        self.assertTrue(mock_update.called)
 
 
 @patch(TASKS_PATH + ".run_character_sync")
