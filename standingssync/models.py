@@ -245,20 +245,14 @@ class SyncedCharacter(_SyncBaseModel):
         Returns:
         - False if the sync character was deleted, True otherwise
         """
-        user = self.character_ownership.user
-        issue_title = f"Standings Sync deactivated for {self}"
-
         # abort if owner does not have sufficient permissions
-        if not user.has_perm("standingssync.add_syncedcharacter"):
+        if not self.character_ownership.user.has_perm(
+            "standingssync.add_syncedcharacter"
+        ):
             logger.info(
                 "%s: sync deactivated due to insufficient user permissions", self
             )
-            notify(
-                user,
-                issue_title,
-                self._issue_message("you no longer have permission for this service"),
-            )
-            self.delete()
+            self._deactivate_sync("you no longer have permission for this service")
             return False
 
         # check if an update is needed
@@ -268,34 +262,8 @@ class SyncedCharacter(_SyncBaseModel):
             )
             return True
 
-        try:
-            token = (
-                Token.objects.filter(
-                    user=self.character_ownership.user,
-                    character_id=self.character_ownership.character.character_id,
-                )
-                .require_scopes(self.get_esi_scopes())
-                .require_valid()
-                .first()
-            )
-        except TokenInvalidError:
-            logger.info("%s: sync deactivated due to invalid token", self)
-            notify(
-                user,
-                issue_title,
-                self._issue_message("your token is no longer valid"),
-            )
-            self.delete()
-            return False
-
-        except TokenExpiredError:
-            logger.info("%s: sync deactivated due to expired token", self)
-            notify(
-                user,
-                issue_title,
-                self._issue_message("your token has expired"),
-            )
-            self.delete()
+        token = self._fetch_token()
+        if not token:
             return False
 
         character_eff_standing = self.manager.get_effective_standing(
@@ -308,27 +276,20 @@ class SyncedCharacter(_SyncBaseModel):
                 f"while STANDINGSSYNC_CHAR_MIN_STANDING is: {STANDINGSSYNC_CHAR_MIN_STANDING} ",
                 self,
             )
-            notify(
-                user,
-                issue_title,
-                self._issue_message(
-                    "your character is no longer blue with the alliance. "
-                    f"The standing value is: {character_eff_standing:.1f} ",
-                ),
+            self._deactivate_sync(
+                "your character is no longer blue with the alliance. "
+                f"The standing value is: {character_eff_standing:.1f} "
             )
-            self.delete()
             return False
-
-        if token is None:
-            self.set_sync_status(self.Error.UNKNOWN)
-            raise RuntimeError("Can not find suitable token for synced char")
 
         logger.info("%s: Updating contacts with new version", self)
         character_id = self.character_ownership.character.character_id
+
         logger.debug("%s: Fetch current contacts", self)
         character_contacts = esi.client.Contacts.get_characters_character_id_contacts(
             token=token.valid_access_token(), character_id=character_id
         ).results()
+
         logger.debug("%s: Delete current contacts", self)
         max_items = 20
         contact_ids_chunks = chunks(
@@ -365,13 +326,47 @@ class SyncedCharacter(_SyncBaseModel):
         self.set_sync_status(self.Error.NONE)
         return True
 
-    def _issue_message(self, message):
-        return (
+    def _fetch_token(self) -> Optional[Token]:
+        try:
+            token = (
+                Token.objects.filter(
+                    user=self.character_ownership.user,
+                    character_id=self.character_ownership.character.character_id,
+                )
+                .require_scopes(self.get_esi_scopes())
+                .require_valid()
+                .first()
+            )
+        except TokenInvalidError:
+            logger.info("%s: sync deactivated due to invalid token", self)
+            self._deactivate_sync("your token is no longer valid")
+            return None
+
+        except TokenExpiredError:
+            logger.info("%s: sync deactivated due to expired token", self)
+            self._deactivate_sync("your token has expired")
+            return None
+
+        if token is None:
+            logger.info("%s: can not find suitable token for synced char", self)
+            self._deactivate_sync("you do not have a token anymore")
+            return None
+
+        return token
+
+    def _deactivate_sync(self, message):
+        message = (
             "Standings Sync has been deactivated for your "
             f"character {self}, because {message}.\n"
             "Feel free to activate sync for your character again, "
             "once the issue has been resolved."
         )
+        notify(
+            self.character_ownership.user,
+            f"Standings Sync deactivated for {self}",
+            message,
+        )
+        self.delete()
 
     @staticmethod
     def get_esi_scopes() -> list:
