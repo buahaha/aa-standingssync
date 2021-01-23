@@ -13,17 +13,22 @@ from .utils import LoggerAddTag
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-class EveContactManager(models.Manager):
-    def grouped_by_standing(self, sync_manager: object) -> dict:
+class EveContactQuerySet(models.QuerySet):
+    def grouped_by_standing(self) -> dict:
         """returns alliance contacts grouped by their standing as dict"""
 
         contacts_by_standing = dict()
-        for contact in self.filter(manager=sync_manager):
+        for contact in self.all():
             if contact.standing not in contacts_by_standing:
                 contacts_by_standing[contact.standing] = set()
             contacts_by_standing[contact.standing].add(contact)
 
         return contacts_by_standing
+
+
+class EveContactManager(models.Manager):
+    def get_queryset(self) -> models.QuerySet:
+        return EveContactQuerySet(self.model, using=self._db)
 
 
 class EveEntityManager(models.Manager):

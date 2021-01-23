@@ -9,19 +9,22 @@
             <h3 class="panel-title">{% trans 'Alliance for Sync' %}</h3>
         </div>
         <div class="panel-body">
+
+            <img class="ra-avatar img-circle" src="{{ alliance.logo_url }}">
+            &nbsp;&nbsp;
+            {{ alliance.alliance_name }}
+            &nbsp;
+            (
             {% if alliance_contacts_count != None %}
-                <img class="ra-avatar img-circle" src="{{ alliance.logo_url }}">
-                &nbsp;&nbsp;
-                {{ alliance.alliance_name }}
-                &nbsp;
-                ({{ alliance_contacts_count }} contacts
+                {{ alliance_contacts_count }} contacts
                 {% if alliance_war_targets_count != None %}
-                , {{ alliance_war_targets_count }} war targets
+                    ,
                 {% endif %}
-                )
-            {% else %}
-                None
             {% endif %}
+            {% if alliance_war_targets_count != None %}
+                {{ alliance_war_targets_count }} war targets
+            {% endif %}
+            )
         </div>
     </div>
     <div class="panel panel-default">
@@ -62,25 +65,9 @@
         </div>
     </div>
 
-    {% if alliance_contacts_count == None and not perms.standingssync.add_syncmanager %}
-        <div class="bs-callout bs-callout-warning">
-        <h4>Warning</h4>
-            <p>
-                {% if request.user.profile.main_character.alliance_name != None %}
-                    This app is not fully setup yet for the
-                    <strong>{{ request.user.profile.main_character.alliance_name  }}</strong> alliance.
-                {% else %}
-                    You do not appear to belong to any alliance, but this app is for alliance members only.
-                {% endif %}
-                Please contact an admin for details.</p>
-        </div>
-    {% endif %}
-
-    {% if alliance_contacts_count != None %}
-        <a id="standingssyncBtnAddSyncChar" class="btn btn-primary" href="{% url 'standingssync:add_character' %}">
-            Add Character to Sync
-        </a>
-    {% endif %}
+    <a id="standingssyncBtnAddSyncChar" class="btn btn-primary" href="{% url 'standingssync:add_character' %}">
+        Add Character to Sync
+    </a>
 
     {% if perms.standingssync.add_syncmanager %}
         <span class="pull-right">
@@ -93,13 +80,16 @@
 
     <div class="bs-callout bs-callout-warning">
         <h4>Read Me First</h4>
-        <p>This app enables you to always have the current alliance standings on your non-alliance characters.<br>
-            Once activated it will automatically replace the personal contacts of your character with
-            the current alliance contacts and will continue to do so until deactivated.</p>
-            {% if alliance_war_targets_count != None %}
-                <p>Further all current war targets of the alliance will be added as contacts with -10 standing.</p>
+        <p>Once activated this app will automatically update the personal contacts of your synced characters:
+        <ul>
+            {% if alliance_contacts_count != None %}
+                <li>Replace all personal contacts with current alliance contacts. This will delete all existing personal contacts.</li>
             {% endif %}
-            <p><i class="fas fa-exclamation-triangle"></i> You will loose all your personal contacts on a synced character, so use with care.</p>
+            {% if alliance_war_targets_count != None %}
+                <li>Add current alliance war targets as personal contacts with -10 standing. This will overwrite existing personal contact standings.</li>
+            {% endif %}
+        </ul>
+        <i class="fas fa-exclamation-triangle"></i> You might loose some or all personal contacts on your non-alliance character.
     </div>
 
 {% endblock %}

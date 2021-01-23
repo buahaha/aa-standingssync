@@ -59,8 +59,6 @@ ALLIANCE_CONTACTS = [
     {"contact_id": 2015, "contact_type": "corporation", "standing": 10.0},
 ]
 
-ESI_CONTACTS_BY_ID = {int(x["contact_id"]): x for x in ALLIANCE_CONTACTS}
-
 
 def load_eve_entities():
     for obj in EveAllianceInfo.objects.all():

@@ -15,7 +15,11 @@ from allianceauth.notifications import notify
 from allianceauth.services.hooks import get_extension_logger
 
 from . import __title__
-from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING, STANDINGSSYNC_ADD_WAR_TARGETS
+from .app_settings import (
+    STANDINGSSYNC_CHAR_MIN_STANDING,
+    STANDINGSSYNC_ADD_WAR_TARGETS,
+    STANDINGSSYNC_REPLACE_CONTACTS,
+)
 from .managers import (
     EveContactManager,
     EveEntityManager,
@@ -282,49 +286,88 @@ class SyncedCharacter(_SyncBaseModel):
             )
             return False
 
-        logger.info("%s: Updating contacts with new version", self)
+        logger.info("%s: Updating contacts", self)
         character_id = self.character_ownership.character.character_id
 
         logger.debug("%s: Fetch current contacts", self)
-        character_contacts = esi.client.Contacts.get_characters_character_id_contacts(
-            token=token.valid_access_token(), character_id=character_id
-        ).results()
-
-        logger.debug("%s: Delete current contacts", self)
-        max_items = 20
-        contact_ids_chunks = chunks(
-            [x["contact_id"] for x in character_contacts], max_items
-        )
-        for contact_ids_chunk in contact_ids_chunks:
-            esi.client.Contacts.delete_characters_character_id_contacts(
-                token=token.valid_access_token(),
-                character_id=character_id,
-                contact_ids=contact_ids_chunk,
+        character_contacts_raw = (
+            esi.client.Contacts.get_characters_character_id_contacts(
+                token=token.valid_access_token(), character_id=character_id
             ).results()
-
-        logger.debug("%s: Write alliance contacts", self)
-        contacts_by_standing = EveContact.objects.grouped_by_standing(
-            sync_manager=self.manager
         )
-        max_items = 100
-        for standing in contacts_by_standing.keys():
-            contact_ids_chunks = chunks(
-                [contact.eve_entity_id for contact in contacts_by_standing[standing]],
-                max_items,
-            )
+        character_contacts = {
+            contact["contact_id"]: contact for contact in character_contacts_raw
+        }
+
+        if STANDINGSSYNC_REPLACE_CONTACTS:
+            logger.debug("%s: Delete current contacts", self)
+            max_items = 20
+            contact_ids_chunks = chunks(list(character_contacts.keys()), max_items)
             for contact_ids_chunk in contact_ids_chunks:
-                esi.client.Contacts.post_characters_character_id_contacts(
+                esi.client.Contacts.delete_characters_character_id_contacts(
                     token=token.valid_access_token(),
                     character_id=character_id,
                     contact_ids=contact_ids_chunk,
-                    standing=standing,
                 ).results()
+
+            logger.debug("%s: Write alliance contacts", self)
+            self._esi_update(
+                character_id=character_id,
+                token=token,
+                contacts_by_standing=self.manager.contacts.all().grouped_by_standing(),
+                esi_method=esi.client.Contacts.post_characters_character_id_contacts,
+            )
+
+        else:
+            # update existing contacts
+            contacts = self.manager.contacts.filter(is_war_target=True)
+            if contacts.exists():
+                contacts_by_standing = contacts.filter(
+                    eve_entity_id__in=character_contacts.keys()
+                ).grouped_by_standing()
+                self._esi_update(
+                    character_id=character_id,
+                    token=token,
+                    contacts_by_standing=contacts_by_standing,
+                    esi_method=esi.client.Contacts.put_characters_character_id_contacts,
+                )
+                # add new contacts
+                contacts_by_standing = contacts.exclude(
+                    eve_entity_id__in=character_contacts.keys()
+                ).grouped_by_standing()
+                self._esi_update(
+                    character_id=character_id,
+                    token=token,
+                    contacts_by_standing=contacts_by_standing,
+                    esi_method=esi.client.Contacts.post_characters_character_id_contacts,
+                )
 
         # store updated version hash with character
         self.version_hash = self.manager.version_hash
         self.save()
         self.set_sync_status(self.Error.NONE)
         return True
+
+    @staticmethod
+    def _esi_update(
+        character_id: int,
+        token: Token,
+        contacts_by_standing: dict,
+        esi_method,
+        max_items=100,
+    ):
+        for standing in contacts_by_standing:
+            contact_ids_chunks = chunks(
+                [contact.eve_entity_id for contact in contacts_by_standing[standing]],
+                max_items,
+            )
+            for contact_ids_chunk in contact_ids_chunks:
+                esi_method(
+                    token=token.valid_access_token(),
+                    character_id=character_id,
+                    contact_ids=contact_ids_chunk,
+                    standing=standing,
+                ).results()
 
     def _fetch_token(self) -> Optional[Token]:
         try:
@@ -429,7 +472,7 @@ class EveEntity(models.Model):
     objects = EveEntityManager()
 
     def __str__(self) -> str:
-        return f"{self.id}-{self.category}"
+        return f"{self.id}-{self.Category.to_esi_type(self.category)}"
 
     def to_esi_dict(self, standing: float) -> dict:
         return {
@@ -453,15 +496,18 @@ class EveContact(models.Model):
 
     objects = EveContactManager()
 
-    def __str__(self):
-        return "{}:{}".format(self.contact_type, self.contact_id)
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["manager", "eve_entity"], name="fk_eve_contact"
             )
         ]
+
+    def __str__(self):
+        return f"{self.eve_entity}"
+
+    def to_esi_dict(self) -> dict:
+        return self.eve_entity.to_esi_dict(self.standing)
 
 
 class EveWar(models.Model):

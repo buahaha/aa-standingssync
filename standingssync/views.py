@@ -9,7 +9,11 @@ from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from allianceauth.services.hooks import get_extension_logger
 
 from . import tasks, __title__
-from .app_settings import STANDINGSSYNC_CHAR_MIN_STANDING, STANDINGSSYNC_ADD_WAR_TARGETS
+from .app_settings import (
+    STANDINGSSYNC_CHAR_MIN_STANDING,
+    STANDINGSSYNC_ADD_WAR_TARGETS,
+    STANDINGSSYNC_REPLACE_CONTACTS,
+)
 from .models import SyncManager, SyncedCharacter
 from .utils import LoggerAddTag, messages_plus, create_link_html
 
@@ -102,9 +106,12 @@ def index(request):
     }
     if sync_manager:
         context["alliance"] = sync_manager.alliance
-        alliance_contacts_count = sync_manager.contacts.filter(
-            is_war_target=False
-        ).count()
+        if STANDINGSSYNC_REPLACE_CONTACTS:
+            alliance_contacts_count = sync_manager.contacts.filter(
+                is_war_target=False
+            ).count()
+        else:
+            alliance_contacts_count = None
         if STANDINGSSYNC_ADD_WAR_TARGETS:
             alliance_war_targets_count = sync_manager.contacts.filter(
                 is_war_target=True

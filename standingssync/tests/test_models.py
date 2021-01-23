@@ -1,3 +1,4 @@
+import copy
 import datetime as dt
 from unittest.mock import patch, Mock
 
@@ -317,30 +318,41 @@ class EsiCharacterContacts:
     def __init__(self) -> None:
         self.contacts = dict()
 
-    def setup_synced_character(self, synced_character, contacts):
+    def setup_synced_character(self, synced_character, contacts: dict):
         character_id = synced_character.character_ownership.character.character_id
         self.setup_character(character_id, contacts)
 
-    def setup_character(self, character_id, contacts):
-        self.contacts[int(character_id)] = {
-            contact["contact_id"]: contact for contact in contacts
-        }
+    def setup_character(self, character_id: int, contacts: dict):
+        self.contacts[int(character_id)] = copy.deepcopy(contacts)
 
     def synced_character_contacts(self, synced_character):
         character_id = synced_character.character_ownership.character.character_id
         return self.character_contacts(character_id)
 
-    def character_contacts(self, character_id):
+    def character_contacts(self, character_id: int) -> dict:
         return self.contacts[character_id]
 
     def esi_get_characters_character_id_contacts(self, character_id, token, page=None):
-        return BravadoOperationStub(self.contacts[character_id].values())
+        return BravadoOperationStub(list(self.contacts[character_id].values()))
 
     def esi_post_characters_character_id_contacts(
         self, character_id, contact_ids, standing, token
     ):
+        contact_type_map = {1: "character", 2: "corporation", 3: "alliance"}
         for contact_id in contact_ids:
-            self.contacts[int(character_id)][int(contact_id)] = standing
+            contact_type = contact_type_map[int(contact_id) // 1000]
+            self.contacts[int(character_id)][int(contact_id)] = {
+                "contact_id": contact_id,
+                "contact_type": contact_type,
+                "standing": standing,
+            }
+        return BravadoOperationStub([])
+
+    def esi_put_characters_character_id_contacts(
+        self, character_id, contact_ids, standing, token
+    ):
+        for contact_id in contact_ids:
+            self.contacts[int(character_id)][int(contact_id)]["standing"] = standing
         return BravadoOperationStub([])
 
     def esi_delete_characters_character_id_contacts(
@@ -352,11 +364,11 @@ class EsiCharacterContacts:
 
 
 class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
-    CHARACTER_CONTACTS = [
-        {"contact_id": 1002, "contact_type": "character", "standing": -10.0},
-        {"contact_id": 2011, "contact_type": "corporation", "standing": 5.0},
-        {"contact_id": 3011, "contact_type": "alliance", "standing": 0.0},
-    ]
+    CHARACTER_CONTACTS = {
+        1014: {"contact_id": 1014, "contact_type": "character", "standing": 10.0},
+        2011: {"contact_id": 2011, "contact_type": "corporation", "standing": 5.0},
+        3011: {"contact_id": 3011, "contact_type": "alliance", "standing": -10.0},
+    }
 
     @classmethod
     def setUpClass(cls):
@@ -390,6 +402,13 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
                 standing=contact["standing"],
                 is_war_target=False,
             )
+        self.sync_manager.contacts.filter(eve_entity_id__in=[1014, 3013]).update(
+            is_war_target=True, standing=-10.0
+        )
+        self.alliance_contacts = {
+            obj.eve_entity_id: obj.to_esi_dict()
+            for obj in self.sync_manager.contacts.all()
+        }
 
         self.synced_character_2 = SyncedCharacter.objects.create(
             character_ownership=self.alt_ownership_2, manager=self.sync_manager
@@ -430,7 +449,7 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         )
         self.assertIsNotNone(self.synced_character_2.last_sync)
 
-    # @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
+    @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
     @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.01)
     @patch(MODELS_PATH + ".Token")
     @patch(MODELS_PATH + ".esi")
@@ -448,13 +467,12 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         # then
         self.assertTrue(result)
         self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
-        expected = {x["contact_id"]: x["standing"] for x in ALLIANCE_CONTACTS}
         self.assertDictEqual(
             esi_character_contacts.synced_character_contacts(self.synced_character_2),
-            expected,
+            self.alliance_contacts,
         )
 
-    # @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
+    @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
     @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
     @patch(MODELS_PATH + ".Token")
     @patch(MODELS_PATH + ".esi")
@@ -472,9 +490,37 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         # then
         self.assertTrue(result)
         self.assertEqual(self.synced_character_3.last_error, SyncedCharacter.Error.NONE)
-        expected = {x["contact_id"]: x["standing"] for x in ALLIANCE_CONTACTS}
         self.assertDictEqual(
             esi_character_contacts.synced_character_contacts(self.synced_character_3),
+            self.alliance_contacts,
+        )
+
+    @patch(MODELS_PATH + ".STANDINGSSYNC_ADD_WAR_TARGETS", True)
+    @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", False)
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.01)
+    @patch(MODELS_PATH + ".Token")
+    @patch(MODELS_PATH + ".esi")
+    def test_should_update_war_targets_only(self, mock_esi, mock_Token):
+        # given
+        esi_character_contacts = EsiCharacterContacts()
+        esi_character_contacts.setup_synced_character(
+            self.synced_character_2, self.CHARACTER_CONTACTS
+        )
+        # when
+        result = self._run_sync(
+            mock_esi, mock_Token, self.synced_character_2, esi_character_contacts
+        )
+        # then
+        self.assertTrue(result)
+        self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
+        expected = {
+            1014: {"contact_id": 1014, "contact_type": "character", "standing": -10.0},
+            2011: {"contact_id": 2011, "contact_type": "corporation", "standing": 5.0},
+            3011: {"contact_id": 3011, "contact_type": "alliance", "standing": -10.0},
+            3013: {"contact_id": 3013, "contact_type": "alliance", "standing": -10.0},
+        }
+        self.assertDictEqual(
+            esi_character_contacts.synced_character_contacts(self.synced_character_2),
             expected,
         )
 
@@ -490,6 +536,9 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         mock_esi.client.Contacts.post_characters_character_id_contacts = (
             esi_character_contacts.esi_post_characters_character_id_contacts
         )
+        mock_esi.client.Contacts.put_characters_character_id_contacts = (
+            esi_character_contacts.esi_put_characters_character_id_contacts
+        )
         mock_Token.objects.filter = Mock()
         synced_character.character_ownership.user = (
             AuthUtils.add_permission_to_user_by_name(
@@ -499,7 +548,8 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         )
         # when
         result = synced_character.update()
-        synced_character.refresh_from_db()
+        if result:
+            synced_character.refresh_from_db()
         return result
 
     def test_should_deactivate_when_insufficient_permission(self):
@@ -608,7 +658,7 @@ class TestEveContactManager(LoadTestDataMixin, NoSocketsTestCase):
             5.0: {c[1015], c[3014], c[2013]},
             10.0: {c[1002], c[1004], c[1016], c[3015], c[2015]},
         }
-        result = EveContact.objects.grouped_by_standing(self.sync_manager)
+        result = self.sync_manager.contacts.all().grouped_by_standing()
         self.maxDiff = None
         self.assertDictEqual(result, expected)
 
