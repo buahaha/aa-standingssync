@@ -1,19 +1,13 @@
-import datetime as dt
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
-from django.utils.timezone import now
-
-from esi.models import Token
-from esi.errors import TokenExpiredError, TokenInvalidError
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.tests.auth_utils import AuthUtils
 
 from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS, BravadoOperationStub
-
 from .. import tasks
-from ..models import SyncManager, SyncedCharacter, EveContact, EveWar, EveEntity
+from ..models import SyncManager, SyncedCharacter, EveContact, EveEntity
 from ..utils import NoSocketsTestCase, generate_invalid_pk
 
 
@@ -145,48 +139,6 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         with self.assertRaises(SyncManager.DoesNotExist):
             tasks.run_manager_sync(99999)
 
-    def test_should_abort_when_no_char(self, mock_run_character_sync):
-        # given
-        sync_manager = SyncManager.objects.create(alliance=self.alliance_1)
-        # when
-        result = tasks.run_manager_sync(sync_manager.pk)
-        # then
-        self.assertFalse(result)
-        sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.Error.NO_CHARACTER)
-
-    # run without char
-    def test_should_abort_when_insufficient_permission(self, mock_run_character_sync):
-        # given
-        sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character_ownership=self.main_ownership_2
-        )
-        # when
-        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
-        # then
-        sync_manager.refresh_from_db()
-        self.assertEqual(
-            sync_manager.last_error, SyncManager.Error.INSUFFICIENT_PERMISSIONS
-        )
-
-    @patch(MODELS_PATH + ".Token")
-    def test_should_report_error_when_character_has_no_token(
-        self, mock_Token, mock_run_character_sync
-    ):
-        # given
-        mock_Token.objects.filter.return_value.require_scopes.return_value.require_valid.return_value.first.return_value = (
-            None
-        )
-        sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character_ownership=self.main_ownership_1
-        )
-        # when
-        result = tasks.run_manager_sync(sync_manager.pk)
-        # then
-        sync_manager.refresh_from_db()
-        self.assertFalse(result)
-        self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
-
     @patch(MODELS_PATH + ".SyncManager.update_from_esi")
     def test_should_report_error_when_unexpected_exception_occurs(
         self, mock_update_from_esi, mock_run_character_sync
@@ -202,108 +154,6 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         sync_manager.refresh_from_db()
         self.assertFalse(result)
         self.assertEqual(sync_manager.last_error, SyncManager.Error.UNKNOWN)
-
-    @patch(MODELS_PATH + ".Token")
-    @patch(MODELS_PATH + ".esi")
-    def test_should_sync_contacts(self, mock_esi, mock_Token, mock_run_character_sync):
-        # given
-        with patch(MODELS_PATH + ".STANDINGSSYNC_ADD_WAR_TARGETS", False):
-            # when
-            sync_manager = self._run_sync(mock_esi, mock_run_character_sync, mock_Token)
-        # then (continued)
-        contact = sync_manager.contacts.get(eve_entity_id=3015)
-        self.assertEqual(contact.standing, 10.0)
-        self.assertFalse(contact.is_war_target)
-
-    @patch(MODELS_PATH + ".Token")
-    @patch(MODELS_PATH + ".esi")
-    def test_should_sync_contacts_and_war_targets(
-        self, mock_esi, mock_Token, mock_run_character_sync
-    ):
-        # given
-        EveWar.objects.create(
-            id=8,
-            aggressor=EveEntity.objects.get(id=3015),
-            defender=EveEntity.objects.get(id=3001),
-            declared=now() - dt.timedelta(days=3),
-            started=now() - dt.timedelta(days=2),
-            is_mutual=False,
-            is_open_for_allies=False,
-        )
-
-        with patch(MODELS_PATH + ".STANDINGSSYNC_ADD_WAR_TARGETS", True):
-            # when
-            sync_manager = self._run_sync(mock_esi, mock_run_character_sync, mock_Token)
-        # then (continued)
-        contact = sync_manager.contacts.get(eve_entity_id=3015)
-        self.assertEqual(contact.standing, -10.0)
-        self.assertTrue(contact.is_war_target)
-
-    def _run_sync(self, mock_esi, mock_run_character_sync, mock_Token):
-        def esi_get_alliances_alliance_id_contacts(*args, **kwargs):
-            return BravadoOperationStub(ESI_CONTACTS)
-
-        # given
-        mock_esi.client.Contacts.get_alliances_alliance_id_contacts.side_effect = (
-            esi_get_alliances_alliance_id_contacts
-        )
-        mock_Token.objects.filter.return_value.require_scopes.return_value.require_valid.return_value.first.return_value = Mock(
-            spec=Token
-        )
-        sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character_ownership=self.main_ownership_1
-        )
-        SyncedCharacter.objects.create(
-            character_ownership=self.alt_ownership, manager=sync_manager
-        )
-        # when
-        result = tasks.run_manager_sync(sync_manager.pk)
-        # then
-        self.assertTrue(result)
-        sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.Error.NONE)
-        expected_contact_ids = {x["contact_id"] for x in ESI_CONTACTS}
-        expected_contact_ids.add(self.character_1.alliance_id)
-        result_contact_ids = set(
-            sync_manager.contacts.values_list("eve_entity_id", flat=True)
-        )
-        self.assertSetEqual(expected_contact_ids, result_contact_ids)
-        self.assertTrue(mock_run_character_sync.delay.called)
-        return sync_manager
-
-    # test expired token
-    @patch(MODELS_PATH + ".Token")
-    def test_run_sync_expired_token(self, mock_Token, mock_run_character_sync):
-        mock_Token.objects.filter.side_effect = TokenExpiredError()
-        sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character_ownership=self.main_ownership_1
-        )
-        SyncedCharacter.objects.create(
-            character_ownership=self.alt_ownership, manager=sync_manager
-        )
-
-        # run manager sync
-        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
-
-        sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_EXPIRED)
-
-    # test invalid token
-    @patch(MODELS_PATH + ".Token")
-    def test_run_sync_invalid_token(self, mock_Token, mock_run_character_sync):
-        mock_Token.objects.filter.side_effect = TokenInvalidError()
-        sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1, character_ownership=self.main_ownership_1
-        )
-        SyncedCharacter.objects.create(
-            character_ownership=self.alt_ownership, manager=sync_manager
-        )
-
-        # run manager sync
-        self.assertFalse(tasks.run_manager_sync(sync_manager.pk))
-
-        sync_manager.refresh_from_db()
-        self.assertEqual(sync_manager.last_error, SyncManager.Error.TOKEN_INVALID)
 
 
 class TestUpdateWars(LoadTestDataMixin, NoSocketsTestCase):
