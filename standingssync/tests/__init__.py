@@ -38,7 +38,7 @@ class BravadoOperationStub:
         return self.result(**kwargs)
 
 
-ESI_CONTACTS = [
+ALLIANCE_CONTACTS = [
     {"contact_id": 1002, "contact_type": "character", "standing": 10.0},
     {"contact_id": 1004, "contact_type": "character", "standing": 10.0},
     {"contact_id": 1005, "contact_type": "character", "standing": -10.0},
@@ -59,7 +59,7 @@ ESI_CONTACTS = [
     {"contact_id": 2015, "contact_type": "corporation", "standing": 10.0},
 ]
 
-ESI_CONTACTS_BY_ID = {int(x["contact_id"]): x for x in ESI_CONTACTS}
+ESI_CONTACTS_BY_ID = {int(x["contact_id"]): x for x in ALLIANCE_CONTACTS}
 
 
 def load_eve_entities():
@@ -80,7 +80,7 @@ def load_eve_entities():
         "corporation": EveEntity.Category.CORPORATION,
         "character": EveEntity.Category.CHARACTER,
     }
-    for info in ESI_CONTACTS:
+    for info in ALLIANCE_CONTACTS:
         EveEntity.objects.get_or_create(
             id=info["contact_id"],
             defaults={"category": map_to_category[info["contact_type"]]},

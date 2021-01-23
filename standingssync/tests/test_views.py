@@ -11,7 +11,7 @@ from allianceauth.tests.auth_utils import AuthUtils
 
 from esi.models import Token
 
-from . import create_test_user, LoadTestDataMixin, ESI_CONTACTS
+from . import create_test_user, LoadTestDataMixin, ALLIANCE_CONTACTS
 from ..models import SyncManager, SyncedCharacter, EveContact, EveEntity
 from ..utils import NoSocketsTestCase
 from .. import views
@@ -36,7 +36,7 @@ class TestMainScreen(LoadTestDataMixin, TestCase):
             character_ownership=cls.main_ownership_1,
             version_hash="new",
         )
-        for contact in ESI_CONTACTS:
+        for contact in ALLIANCE_CONTACTS:
             EveContact.objects.create(
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
@@ -109,7 +109,7 @@ class TestAddSyncChar(LoadTestDataMixin, NoSocketsTestCase):
             character_ownership=cls.main_ownership_1,
             version_hash="new",
         )
-        for contact in ESI_CONTACTS:
+        for contact in ALLIANCE_CONTACTS:
             EveContact.objects.create(
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
@@ -249,7 +249,7 @@ class TestAddAllianceManager(LoadTestDataMixin, NoSocketsTestCase):
             character_ownership=cls.main_ownership_1,
             version_hash="new",
         )
-        for contact in ESI_CONTACTS:
+        for contact in ALLIANCE_CONTACTS:
             EveContact.objects.create(
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),

@@ -11,7 +11,12 @@ from allianceauth.eveonline.models import EveCharacter
 from allianceauth.tests.auth_utils import AuthUtils
 
 
-from . import LoadTestDataMixin, create_test_user, ESI_CONTACTS, BravadoOperationStub
+from . import (
+    LoadTestDataMixin,
+    create_test_user,
+    ALLIANCE_CONTACTS,
+    BravadoOperationStub,
+)
 from ..models import (
     SyncManager,
     EveContact,
@@ -282,7 +287,7 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
 
     def _run_sync(self, sync_manager, mock_esi, mock_Token):
         def esi_get_alliances_alliance_id_contacts(*args, **kwargs):
-            return BravadoOperationStub(ESI_CONTACTS)
+            return BravadoOperationStub(ALLIANCE_CONTACTS)
 
         # given
         mock_esi.client.Contacts.get_alliances_alliance_id_contacts.side_effect = (
@@ -297,7 +302,7 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
         self.assertTrue(result)
         sync_manager.refresh_from_db()
         self.assertEqual(sync_manager.last_error, SyncManager.Error.NONE)
-        expected_contact_ids = {x["contact_id"] for x in ESI_CONTACTS}
+        expected_contact_ids = {x["contact_id"] for x in ALLIANCE_CONTACTS}
         expected_contact_ids.add(self.character_1.alliance_id)
         result_contact_ids = set(
             sync_manager.contacts.values_list("eve_entity_id", flat=True)
@@ -306,7 +311,53 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
         return sync_manager
 
 
+class EsiCharacterContacts:
+    """Simulates the contacts for a character on ESI"""
+
+    def __init__(self) -> None:
+        self.contacts = dict()
+
+    def setup_synced_character(self, synced_character, contacts):
+        character_id = synced_character.character_ownership.character.character_id
+        self.setup_character(character_id, contacts)
+
+    def setup_character(self, character_id, contacts):
+        self.contacts[int(character_id)] = {
+            contact["contact_id"]: contact for contact in contacts
+        }
+
+    def synced_character_contacts(self, synced_character):
+        character_id = synced_character.character_ownership.character.character_id
+        return self.character_contacts(character_id)
+
+    def character_contacts(self, character_id):
+        return self.contacts[character_id]
+
+    def esi_get_characters_character_id_contacts(self, character_id, token, page=None):
+        return BravadoOperationStub(self.contacts[character_id].values())
+
+    def esi_post_characters_character_id_contacts(
+        self, character_id, contact_ids, standing, token
+    ):
+        for contact_id in contact_ids:
+            self.contacts[int(character_id)][int(contact_id)] = standing
+        return BravadoOperationStub([])
+
+    def esi_delete_characters_character_id_contacts(
+        self, character_id, contact_ids, token
+    ):
+        for contact_id in contact_ids:
+            del self.contacts[character_id][contact_id]
+        return BravadoOperationStub([])
+
+
 class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
+    CHARACTER_CONTACTS = [
+        {"contact_id": 1002, "contact_type": "character", "standing": -10.0},
+        {"contact_id": 2011, "contact_type": "corporation", "standing": 5.0},
+        {"contact_id": 3011, "contact_type": "alliance", "standing": 0.0},
+    ]
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -332,7 +383,7 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
     def setUp(self) -> None:
         self.maxDiff = None
         self.sync_manager.contacts.all().delete()
-        for contact in ESI_CONTACTS:
+        for contact in ALLIANCE_CONTACTS:
             EveContact.objects.create(
                 manager=self.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
@@ -379,64 +430,65 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         )
         self.assertIsNotNone(self.synced_character_2.last_sync)
 
-    @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
-    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.1)
+    # @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
+    @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.01)
     @patch(MODELS_PATH + ".Token")
     @patch(MODELS_PATH + ".esi")
-    def test_should_sync_all_contacts_1(self, mock_esi, mock_Token):
+    def test_should_replace_all_contacts_1(self, mock_esi, mock_Token):
         """run normal sync for a character which has blue standing"""
+        # given
+        esi_character_contacts = EsiCharacterContacts()
+        esi_character_contacts.setup_synced_character(
+            self.synced_character_2, self.CHARACTER_CONTACTS
+        )
         # when
-        result, character_contacts = self._run_sync(
-            mock_esi, mock_Token, self.synced_character_2
+        result = self._run_sync(
+            mock_esi, mock_Token, self.synced_character_2, esi_character_contacts
         )
         # then
         self.assertTrue(result)
         self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
-        # self.assertEqual(mock_delete_result.result.call_count, 1)
-        expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
-        self.assertDictEqual(character_contacts, expected)
+        expected = {x["contact_id"]: x["standing"] for x in ALLIANCE_CONTACTS}
+        self.assertDictEqual(
+            esi_character_contacts.synced_character_contacts(self.synced_character_2),
+            expected,
+        )
 
-    @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
+    # @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
     @patch(MODELS_PATH + ".STANDINGSSYNC_CHAR_MIN_STANDING", 0.0)
     @patch(MODELS_PATH + ".Token")
     @patch(MODELS_PATH + ".esi")
-    def test_should_sync_all_contacts_2(self, mock_esi, mock_Token):
+    def test_should_replace_all_contacts_2(self, mock_esi, mock_Token):
         """run normal sync for a character which has no standing and allow neutrals"""
+        # given
+        esi_character_contacts = EsiCharacterContacts()
+        esi_character_contacts.setup_synced_character(
+            self.synced_character_3, self.CHARACTER_CONTACTS
+        )
         # when
-        result, character_contacts = self._run_sync(
-            mock_esi, mock_Token, self.synced_character_3
+        result = self._run_sync(
+            mock_esi, mock_Token, self.synced_character_3, esi_character_contacts
         )
         # then
         self.assertTrue(result)
         self.assertEqual(self.synced_character_3.last_error, SyncedCharacter.Error.NONE)
-        # self.assertEqual(mock_delete_result.result.call_count, 1)
-        expected = {x["contact_id"]: x["standing"] for x in ESI_CONTACTS}
-        self.assertDictEqual(character_contacts, expected)
+        expected = {x["contact_id"]: x["standing"] for x in ALLIANCE_CONTACTS}
+        self.assertDictEqual(
+            esi_character_contacts.synced_character_contacts(self.synced_character_3),
+            expected,
+        )
 
-    def _run_sync(self, mock_esi, mock_Token, synced_character):
-        character_id = int(synced_character.character_ownership.character.character_id)
-        characters_contacts = {character_id: dict()}
-
-        def esi_get_characters_character_id_contacts(*args, **kwargs):
-            return BravadoOperationStub(ESI_CONTACTS)
-
-        def esi_post_characters_character_id_contacts(
-            character_id, contact_ids, standing, token
-        ):
-            for contact_id in contact_ids:
-                characters_contacts[int(character_id)][int(contact_id)] = standing
-
-            return BravadoOperationStub([])
-
+    @staticmethod
+    def _run_sync(mock_esi, mock_Token, synced_character, esi_character_contacts):
         # given
         mock_esi.client.Contacts.get_characters_character_id_contacts.side_effect = (
-            esi_get_characters_character_id_contacts
+            esi_character_contacts.esi_get_characters_character_id_contacts
         )
-        mock_esi.client.Contacts.delete_characters_character_id_contacts.return_value = BravadoOperationStub(
-            []
+        mock_esi.client.Contacts.delete_characters_character_id_contacts.side_effect = (
+            esi_character_contacts.esi_delete_characters_character_id_contacts
         )
         mock_esi.client.Contacts.post_characters_character_id_contacts = (
-            esi_post_characters_character_id_contacts
+            esi_character_contacts.esi_post_characters_character_id_contacts
         )
         mock_Token.objects.filter = Mock()
         synced_character.character_ownership.user = (
@@ -448,7 +500,7 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         # when
         result = synced_character.update()
         synced_character.refresh_from_db()
-        return result, characters_contacts[character_id]
+        return result
 
     def test_should_deactivate_when_insufficient_permission(self):
         # when
@@ -531,7 +583,7 @@ class TestEveContactManager(LoadTestDataMixin, NoSocketsTestCase):
             character_ownership=cls.main_ownership_1,
             version_hash="new",
         )
-        for contact in ESI_CONTACTS:
+        for contact in ALLIANCE_CONTACTS:
             EveContact.objects.create(
                 manager=cls.sync_manager,
                 eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
