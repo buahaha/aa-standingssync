@@ -13,6 +13,7 @@ from .app_settings import (
     STANDINGSSYNC_CHAR_MIN_STANDING,
     STANDINGSSYNC_ADD_WAR_TARGETS,
     STANDINGSSYNC_REPLACE_CONTACTS,
+    STANDINGSSYNC_WAR_TARGETS_LABEL_NAME,
 )
 from .models import SyncManager, SyncedCharacter
 from .utils import LoggerAddTag, messages_plus, create_link_html
@@ -82,11 +83,27 @@ def index(request):
 
         status_message_raw = synced_character.get_status_message()
         if status_message_raw.lower() == "ok":
-            status_message = format_html(
-                '<i class="fas fa-check" style="color:green;"></i>'
-            )
+            if (
+                STANDINGSSYNC_ADD_WAR_TARGETS
+                and synced_character.has_war_targets_label is False
+            ):
+                status_message = format_html(
+                    '<span class="text-warning">'
+                    '<i class="fas fa-info-circle"></i> '
+                    "Please create a contact label with the name: {}</span>",
+                    STANDINGSSYNC_WAR_TARGETS_LABEL_NAME,
+                )
+            else:
+                status_message = format_html(
+                    '<i class="fas fa-check text-success"></i>'
+                )
         else:
             status_message = status_message_raw
+            status_message = format_html(
+                '<span class="text-danger">'
+                '<i class="fas fa-exclamation-triangle"></i> {}</span>',
+                status_message_raw,
+            )
 
         synced_characters.append(
             {
@@ -125,6 +142,7 @@ def index(request):
 
     context["alliance_contacts_count"] = alliance_contacts_count
     context["alliance_war_targets_count"] = alliance_war_targets_count
+    context["war_targets_label_name"] = STANDINGSSYNC_WAR_TARGETS_LABEL_NAME
 
     return render(request, "standingssync/index.html", context)
 

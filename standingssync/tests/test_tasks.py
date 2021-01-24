@@ -135,7 +135,7 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         cls.main_ownership_2 = CharacterOwnership.objects.get(
             character=cls.character_2, user=cls.user_2
         )
-        cls.alt_ownership = CharacterOwnership.objects.create(
+        cls.alt_ownership_2 = CharacterOwnership.objects.create(
             character=cls.character_4, owner_hash="x4", user=cls.user_2
         )
 
@@ -159,6 +159,28 @@ class TestManagerSync(LoadTestDataMixin, TestCase):
         sync_manager.refresh_from_db()
         self.assertFalse(result)
         self.assertEqual(sync_manager.last_error, SyncManager.Error.UNKNOWN)
+
+    @patch(MODELS_PATH + ".SyncManager.update_from_esi")
+    def test_should_normally_run_character_sync(
+        self, mock_update_from_esi, mock_run_character_sync
+    ):
+        # given
+        mock_update_from_esi.return_value = "abc"
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
+        )
+        synced_character = SyncedCharacter.objects.create(
+            character_ownership=self.alt_ownership_2, manager=sync_manager
+        )
+        # when
+        result = tasks.run_manager_sync(sync_manager.pk)
+        # then
+        sync_manager.refresh_from_db()
+        self.assertTrue(result)
+        self.assertEqual(sync_manager.last_error, SyncManager.Error.NONE)
+        args, kwargs = mock_run_character_sync.delay.call_args
+        self.assertEqual(kwargs["sync_char_pk"], synced_character.pk)
+        self.assertFalse(kwargs["force_sync"])
 
 
 class TestUpdateWars(LoadTestDataMixin, NoSocketsTestCase):

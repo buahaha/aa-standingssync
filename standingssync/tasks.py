@@ -48,11 +48,14 @@ def run_manager_sync(manager_pk: int, force_sync: bool = False) -> bool:
     if not new_version_hash:
         return False
 
-    alts_need_syncing = sync_manager.synced_characters.exclude(
-        version_hash=new_version_hash
-    ).values_list("pk", flat=True)
+    if force_sync:
+        alts_need_syncing = sync_manager.synced_characters.values_list("pk", flat=True)
+    else:
+        alts_need_syncing = sync_manager.synced_characters.exclude(
+            version_hash=new_version_hash
+        ).values_list("pk", flat=True)
     for character_pk in alts_need_syncing:
-        run_character_sync.delay(character_pk)
+        run_character_sync.delay(sync_char_pk=character_pk, force_sync=force_sync)
 
     return True
 

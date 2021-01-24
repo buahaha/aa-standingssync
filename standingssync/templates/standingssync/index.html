@@ -49,13 +49,13 @@
                             {% else %}
                                 <tr>
                             {% endif %}
-                                <td>{{ character.name_html }}</td>
-                                <td>{{ character.organization }}</td>
-                                <td>{{ character.status_message }}</td>
-                                <td><a class="btn btn-warning" href="{% url 'standingssync:remove_character' character.pk %}" role="button">
-                                    <i class="far fa-trash-alt"></i>
-                                </a></td>
-                            </tr>
+                                    <td>{{ character.name_html }}</td>
+                                    <td>{{ character.organization }}</td>
+                                    <td>{{ character.status_message }}</td>
+                                    <td><a class="btn btn-warning" href="{% url 'standingssync:remove_character' character.pk %}" role="button">
+                                        <i class="far fa-trash-alt"></i>
+                                    </a></td>
+                                </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -79,17 +79,24 @@
     {% endif %}
 
     <div class="bs-callout bs-callout-warning">
-        <h4>Read Me First</h4>
-        <p>Once activated this app will automatically update the personal contacts of your synced characters:
-        <ul>
-            {% if alliance_contacts_count != None %}
-                <li>Replace all personal contacts with current alliance contacts. This will delete all existing personal contacts.</li>
-            {% endif %}
-            {% if alliance_war_targets_count != None %}
-                <li>Add current alliance war targets as personal contacts with -10 standing. This will overwrite existing personal contact standings.</li>
-            {% endif %}
-        </ul>
-        <i class="fas fa-exclamation-triangle"></i> You might loose some or all personal contacts on your non-alliance character.
+        <h3>Read Me First</h3>
+        <p>Once activated this app will automatically update the personal contacts of your synced characters. Note that you can only sync out-of-alliance alts.</p>
+        {% if alliance_contacts_count != None %}
+            <h4>Alliance Contacts</h4>
+            <p>
+                All personal contacts will be replaced with alliance contacts allowing you to see alliance standings on your synced characters.
+            </p>
+            <p>
+                <i class="fas fa-exclamation-triangle"></i> You will loose all personal contacts on your synced characters.
+            </p>
+        {% endif %}
+        {% if alliance_war_targets_count != None %}
+            <h4>War Targets</h4>
+            <p>Adds current alliance war targets as personal contacts with -10 standing a personal contact to your synced characters. If the contact already exists it will be overwritten. War targets can be distinguished by having the war targets contact label.</p>
+            <p><i class="fas fa-info-circle"></i>
+                Please make sure to create a contact label with the name "{{ war_targets_label_name }}" on all your characters.
+            </p>
+        {% endif %}
     </div>
 
 {% endblock %}

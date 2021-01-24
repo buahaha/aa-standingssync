@@ -11,5 +11,10 @@ STANDINGSSYNC_CHAR_MIN_STANDING = clean_setting(
 # with standing = -10 to synced characters
 STANDINGSSYNC_ADD_WAR_TARGETS = clean_setting("STANDINGSSYNC_ADD_WAR_TARGETS", False)
 
+# Name of contacts label for war targets
+STANDINGSSYNC_WAR_TARGETS_LABEL_NAME = clean_setting(
+    "STANDINGSSYNC_WAR_TARGETS_LABEL_NAME", "WAR TARGETS"
+)
+
 # When enabled will replace contacts of synced characters with alliance contacts
 STANDINGSSYNC_REPLACE_CONTACTS = clean_setting("STANDINGSSYNC_REPLACE_CONTACTS", True)

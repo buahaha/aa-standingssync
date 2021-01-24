@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [1.2.0] - tbd
+## [1.2.0b2] - 2021-01-24
 
 ### Added
 
-- Ability to also sync war targets to alt characters [#5](https://gitlab.com/ErikKalkoken/aa-standingssync/-/issues/5)
+- Ability to also sync war targets to alt characters. Please see settings on how to activate this feature. [#5](https://gitlab.com/ErikKalkoken/aa-standingssync/-/issues/5)
 
 ### Changed
 

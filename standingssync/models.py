@@ -19,6 +19,7 @@ from .app_settings import (
     STANDINGSSYNC_CHAR_MIN_STANDING,
     STANDINGSSYNC_ADD_WAR_TARGETS,
     STANDINGSSYNC_REPLACE_CONTACTS,
+    STANDINGSSYNC_WAR_TARGETS_LABEL_NAME,
 )
 from .managers import (
     EveContactManager,
@@ -170,7 +171,9 @@ class SyncManager(_SyncBaseModel):
         # determine if contacts have changed by comparing their hashes
         new_version_hash = hashlib.md5(json.dumps(contacts).encode("utf-8")).hexdigest()
         if force_sync or new_version_hash != self.version_hash:
-            logger.info("%s: Storing alliance update with %s contacts", self, contacts)
+            logger.info(
+                "%s: Storing alliance update with %d contacts", self, len(contacts)
+            )
 
             # add the sync alliance with max standing to contacts
             contacts[alliance_id] = {
@@ -223,6 +226,7 @@ class SyncedCharacter(_SyncBaseModel):
         SyncManager, on_delete=models.CASCADE, related_name="synced_characters"
     )
     last_error = models.IntegerField(choices=Error.choices, default=Error.NONE)
+    has_war_targets_label = models.BooleanField(default=None, null=True)
 
     def __str__(self):
         return self.character_ownership.character.character_name
@@ -250,6 +254,7 @@ class SyncedCharacter(_SyncBaseModel):
         - False if the sync character was deleted, True otherwise
         """
         # abort if owner does not have sufficient permissions
+        logger.info("%s: Updating contacts", self)
         if not self.character_ownership.user.has_perm(
             "standingssync.add_syncedcharacter"
         ):
@@ -286,10 +291,8 @@ class SyncedCharacter(_SyncBaseModel):
             )
             return False
 
-        logger.info("%s: Updating contacts", self)
         character_id = self.character_ownership.character.character_id
-
-        logger.debug("%s: Fetch current contacts", self)
+        logger.info("%s: Fetching current contacts", self)
         character_contacts_raw = (
             esi.client.Contacts.get_characters_character_id_contacts(
                 token=token.valid_access_token(), character_id=character_id
@@ -298,30 +301,79 @@ class SyncedCharacter(_SyncBaseModel):
         character_contacts = {
             contact["contact_id"]: contact for contact in character_contacts_raw
         }
+        logger.info("%s: Fetching current labels", self)
+        labels_raw = esi.client.Contacts.get_characters_character_id_contacts_labels(
+            character_id=character_id, token=token.valid_access_token()
+        ).results()
+        for row in labels_raw:
+            if (
+                row.get("label_name").lower()
+                == STANDINGSSYNC_WAR_TARGETS_LABEL_NAME.lower()
+            ):
+                war_target_id = row.get("label_id")
+                break
+        else:
+            war_target_id = None
+
+        if war_target_id:
+            logger.debug("%s: Has war target label", self)
+            self.has_war_targets_label = True
+            self.save()
+            ids_to_delete = [
+                contact_id
+                for contact_id, contact in character_contacts.items()
+                if contact["label_ids"] and war_target_id in contact["label_ids"]
+            ]
+            if ids_to_delete:
+                logger.info("%s: Removing old war target contacts", self)
+                self._esi_delete_contacts(
+                    character_id=character_id, token=token, contact_ids=ids_to_delete
+                )
+                for contact_id in ids_to_delete:
+                    del character_contacts[contact_id]
+        else:
+            logger.debug("%s: Does not have war target label", self)
+            self.has_war_targets_label = False
+            self.save()
 
         if STANDINGSSYNC_REPLACE_CONTACTS:
-            logger.debug("%s: Delete current contacts", self)
-            max_items = 20
-            contact_ids_chunks = chunks(list(character_contacts.keys()), max_items)
-            for contact_ids_chunk in contact_ids_chunks:
-                esi.client.Contacts.delete_characters_character_id_contacts(
-                    token=token.valid_access_token(),
-                    character_id=character_id,
-                    contact_ids=contact_ids_chunk,
-                ).results()
-
-            logger.debug("%s: Write alliance contacts", self)
-            self._esi_update(
+            logger.info("%s: Deleting current contacts", self)
+            self._esi_delete_contacts(
                 character_id=character_id,
                 token=token,
-                contacts_by_standing=self.manager.contacts.all().grouped_by_standing(),
-                esi_method=esi.client.Contacts.post_characters_character_id_contacts,
+                contact_ids=list(character_contacts.keys()),
             )
-
+            if STANDINGSSYNC_ADD_WAR_TARGETS and war_target_id:
+                logger.info("%s: Writing alliance contacts and war targets", self)
+                self._esi_update(
+                    character_id=character_id,
+                    token=token,
+                    contacts_by_standing=self.manager.contacts.filter(
+                        is_war_target=False
+                    ).grouped_by_standing(),
+                    esi_method=esi.client.Contacts.post_characters_character_id_contacts,
+                )
+                self._esi_update(
+                    character_id=character_id,
+                    token=token,
+                    contacts_by_standing=self.manager.contacts.filter(
+                        is_war_target=True
+                    ).grouped_by_standing(),
+                    esi_method=esi.client.Contacts.post_characters_character_id_contacts,
+                    label_ids=[war_target_id],
+                )
+            else:
+                logger.info("%s: Writing alliance contacts", self)
+                self._esi_update(
+                    character_id=character_id,
+                    token=token,
+                    contacts_by_standing=self.manager.contacts.all().grouped_by_standing(),
+                    esi_method=esi.client.Contacts.post_characters_character_id_contacts,
+                )
         else:
-            # update existing contacts
             contacts = self.manager.contacts.filter(is_war_target=True)
             if contacts.exists():
+                logger.info("%s: Update existing contacts to war target", self)
                 contacts_by_standing = contacts.filter(
                     eve_entity_id__in=character_contacts.keys()
                 ).grouped_by_standing()
@@ -330,8 +382,9 @@ class SyncedCharacter(_SyncBaseModel):
                     token=token,
                     contacts_by_standing=contacts_by_standing,
                     esi_method=esi.client.Contacts.put_characters_character_id_contacts,
+                    label_ids=[war_target_id] if war_target_id else None,
                 )
-                # add new contacts
+                logger.info("%s: Add new war target contacts", self)
                 contacts_by_standing = contacts.exclude(
                     eve_entity_id__in=character_contacts.keys()
                 ).grouped_by_standing()
@@ -340,6 +393,7 @@ class SyncedCharacter(_SyncBaseModel):
                     token=token,
                     contacts_by_standing=contacts_by_standing,
                     esi_method=esi.client.Contacts.post_characters_character_id_contacts,
+                    label_ids=[war_target_id] if war_target_id else None,
                 )
 
         # store updated version hash with character
@@ -349,12 +403,24 @@ class SyncedCharacter(_SyncBaseModel):
         return True
 
     @staticmethod
+    def _esi_delete_contacts(character_id: int, token: Token, contact_ids: list):
+        max_items = 20
+        contact_ids_chunks = chunks(contact_ids, max_items)
+        for contact_ids_chunk in contact_ids_chunks:
+            esi.client.Contacts.delete_characters_character_id_contacts(
+                token=token.valid_access_token(),
+                character_id=character_id,
+                contact_ids=contact_ids_chunk,
+            ).results()
+
+    @staticmethod
     def _esi_update(
         character_id: int,
         token: Token,
         contacts_by_standing: dict,
         esi_method,
-        max_items=100,
+        label_ids: list = None,
+        max_items: int = 100,
     ):
         for standing in contacts_by_standing:
             contact_ids_chunks = chunks(
@@ -367,6 +433,7 @@ class SyncedCharacter(_SyncBaseModel):
                     character_id=character_id,
                     contact_ids=contact_ids_chunk,
                     standing=standing,
+                    label_ids=label_ids if label_ids else [],
                 ).results()
 
     def _fetch_token(self) -> Optional[Token]:
