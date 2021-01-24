@@ -1,3 +1,4 @@
+from enum import Enum
 import copy
 import datetime as dt
 from unittest.mock import patch, Mock
@@ -312,63 +313,137 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
         return sync_manager
 
 
+class EsiContact:
+    class ContactType(Enum):
+        CHARACTER = "character"
+        CORPORATION = "corporation"
+        ALLIANCE = "alliance"
+
+    def __init__(
+        self,
+        contact_id: int,
+        contact_type: str,
+        standing: float,
+        label_ids: list = None,
+    ) -> None:
+        if contact_type not in self.ContactType:
+            raise ValueError(f"Invalid contact_type: {contact_type}")
+
+        self._contact_id = int(contact_id)
+        self._contact_type = contact_type
+        self.standing = float(standing)
+        self.label_ids = list(label_ids) if label_ids else []
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}(contact_id={self.contact_id}, "
+            f"contact_type={self.contact_type}, standing={self.standing}, "
+            f"label_ids={self.label_ids}"
+        )
+
+    def __key(self):
+        return (
+            self.contact_id,
+            self.contact_type,
+            self.standing,
+            tuple(self.label_ids),
+        )
+
+    def __hash__(self):
+        return hash(self.__key())
+
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            return self.__key() == other.__key()
+        return NotImplemented
+
+    @property
+    def contact_id(self):
+        return self._contact_id
+
+    @property
+    def contact_type(self):
+        return self._contact_type
+
+    def to_esi_dict(self) -> dict:
+        return {
+            "contact_id": self.contact_id,
+            "contact_type": self.ContactType(self.contact_type),
+            "standing": self.standing,
+            "label_ids": self.label_ids,
+        }
+
+
 class EsiCharacterContacts:
     """Simulates the contacts for a character on ESI"""
 
     def __init__(self) -> None:
-        self.contacts = dict()
+        self._contacts = dict()
+        self._labels = dict()
 
-    def setup_synced_character(self, synced_character, contacts: dict):
-        character_id = synced_character.character_ownership.character.character_id
-        self.setup_character(character_id, contacts)
+    def setup_contacts(self, character_id: int, contacts: list):
+        self._contacts[character_id] = dict()
+        for contact in contacts:
+            self._contacts[character_id][contact.contact_id] = copy.deepcopy(contact)
 
-    def setup_character(self, character_id: int, contacts: dict):
-        self.contacts[int(character_id)] = copy.deepcopy(contacts)
+    def setup_labels(self, character_id: int, labels: dict):
+        self._contacts[character_id] = dict(labels)
 
-    def synced_character_contacts(self, synced_character):
-        character_id = synced_character.character_ownership.character.character_id
-        return self.character_contacts(character_id)
+    def contacts(self, character_id: int) -> dict:
+        return self._contacts[character_id].values()
 
-    def character_contacts(self, character_id: int) -> dict:
-        return self.contacts[character_id]
+    def labels(self, character_id: int) -> dict:
+        return self._labels[character_id]
 
     def esi_get_characters_character_id_contacts(self, character_id, token, page=None):
-        return BravadoOperationStub(list(self.contacts[character_id].values()))
+        contacts = [obj.to_esi_dict() for obj in self._contacts[character_id].values()]
+        return BravadoOperationStub(contacts)
+
+    def esi_get_characters_character_id_contacts_labels(
+        self, character_id, token, page=None
+    ):
+        labels = [
+            {"label_id": k, "label_name": v}
+            for k, v in self._labels[character_id].items()
+        ]
+        return BravadoOperationStub(labels)
 
     def esi_post_characters_character_id_contacts(
         self, character_id, contact_ids, standing, token
     ):
-        contact_type_map = {1: "character", 2: "corporation", 3: "alliance"}
+        contact_type_map = {
+            1: EsiContact.ContactType.CHARACTER,
+            2: EsiContact.ContactType.CORPORATION,
+            3: EsiContact.ContactType.ALLIANCE,
+        }
         for contact_id in contact_ids:
-            contact_type = contact_type_map[int(contact_id) // 1000]
-            self.contacts[int(character_id)][int(contact_id)] = {
-                "contact_id": contact_id,
-                "contact_type": contact_type,
-                "standing": standing,
-            }
+            contact_type = contact_type_map[contact_id // 1000]
+            self._contacts[character_id][contact_id] = EsiContact(
+                contact_id=contact_id, contact_type=contact_type, standing=standing
+            )
         return BravadoOperationStub([])
 
     def esi_put_characters_character_id_contacts(
         self, character_id, contact_ids, standing, token
     ):
         for contact_id in contact_ids:
-            self.contacts[int(character_id)][int(contact_id)]["standing"] = standing
+            self._contacts[character_id][contact_id].standing = standing
         return BravadoOperationStub([])
 
     def esi_delete_characters_character_id_contacts(
         self, character_id, contact_ids, token
     ):
         for contact_id in contact_ids:
-            del self.contacts[character_id][contact_id]
+            del self._contacts[character_id][contact_id]
         return BravadoOperationStub([])
 
 
 class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
-    CHARACTER_CONTACTS = {
-        1014: {"contact_id": 1014, "contact_type": "character", "standing": 10.0},
-        2011: {"contact_id": 2011, "contact_type": "corporation", "standing": 5.0},
-        3011: {"contact_id": 3011, "contact_type": "alliance", "standing": -10.0},
-    }
+    CHARACTER_CONTACTS = [
+        EsiContact(1014, EsiContact.ContactType.CHARACTER, standing=10.0),
+        EsiContact(2011, EsiContact.ContactType.CORPORATION, standing=5.0),
+        EsiContact(3011, EsiContact.ContactType.ALLIANCE, standing=-10.0),
+    ]
 
     @classmethod
     def setUpClass(cls):
@@ -392,6 +467,19 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
             version_hash="new",
         )
 
+    @staticmethod
+    def eve_contact_2_esi_contact(eve_contact):
+        map_category_2_type = {
+            EveEntity.Category.CHARACTER: EsiContact.ContactType.CHARACTER,
+            EveEntity.Category.CORPORATION: EsiContact.ContactType.CORPORATION,
+            EveEntity.Category.ALLIANCE: EsiContact.ContactType.ALLIANCE,
+        }
+        return EsiContact(
+            contact_id=eve_contact.eve_entity_id,
+            contact_type=map_category_2_type[eve_contact.eve_entity.category],
+            standing=eve_contact.standing,
+        )
+
     def setUp(self) -> None:
         self.maxDiff = None
         self.sync_manager.contacts.all().delete()
@@ -405,10 +493,10 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         self.sync_manager.contacts.filter(eve_entity_id__in=[1014, 3013]).update(
             is_war_target=True, standing=-10.0
         )
-        self.alliance_contacts = {
-            obj.eve_entity_id: obj.to_esi_dict()
+        self.alliance_contacts = [
+            self.eve_contact_2_esi_contact(obj)
             for obj in self.sync_manager.contacts.all()
-        }
+        ]
 
         self.synced_character_2 = SyncedCharacter.objects.create(
             character_ownership=self.alt_ownership_2, manager=self.sync_manager
@@ -456,10 +544,11 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
     def test_should_replace_all_contacts_1(self, mock_esi, mock_Token):
         """run normal sync for a character which has blue standing"""
         # given
-        esi_character_contacts = EsiCharacterContacts()
-        esi_character_contacts.setup_synced_character(
-            self.synced_character_2, self.CHARACTER_CONTACTS
+        character_id = (
+            self.synced_character_2.character_ownership.character.character_id
         )
+        esi_character_contacts = EsiCharacterContacts()
+        esi_character_contacts.setup_contacts(character_id, self.CHARACTER_CONTACTS)
         # when
         result = self._run_sync(
             mock_esi, mock_Token, self.synced_character_2, esi_character_contacts
@@ -467,9 +556,9 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         # then
         self.assertTrue(result)
         self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
-        self.assertDictEqual(
-            esi_character_contacts.synced_character_contacts(self.synced_character_2),
-            self.alliance_contacts,
+        self.assertSetEqual(
+            set(esi_character_contacts.contacts(character_id)),
+            set(self.alliance_contacts),
         )
 
     @patch(MODELS_PATH + ".STANDINGSSYNC_REPLACE_CONTACTS", True)
@@ -479,10 +568,11 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
     def test_should_replace_all_contacts_2(self, mock_esi, mock_Token):
         """run normal sync for a character which has no standing and allow neutrals"""
         # given
-        esi_character_contacts = EsiCharacterContacts()
-        esi_character_contacts.setup_synced_character(
-            self.synced_character_3, self.CHARACTER_CONTACTS
+        character_id = (
+            self.synced_character_3.character_ownership.character.character_id
         )
+        esi_character_contacts = EsiCharacterContacts()
+        esi_character_contacts.setup_contacts(character_id, self.CHARACTER_CONTACTS)
         # when
         result = self._run_sync(
             mock_esi, mock_Token, self.synced_character_3, esi_character_contacts
@@ -490,9 +580,9 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         # then
         self.assertTrue(result)
         self.assertEqual(self.synced_character_3.last_error, SyncedCharacter.Error.NONE)
-        self.assertDictEqual(
-            esi_character_contacts.synced_character_contacts(self.synced_character_3),
-            self.alliance_contacts,
+        self.assertSetEqual(
+            set(esi_character_contacts.contacts(character_id)),
+            set(self.alliance_contacts),
         )
 
     @patch(MODELS_PATH + ".STANDINGSSYNC_ADD_WAR_TARGETS", True)
@@ -502,10 +592,11 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
     @patch(MODELS_PATH + ".esi")
     def test_should_update_war_targets_only(self, mock_esi, mock_Token):
         # given
-        esi_character_contacts = EsiCharacterContacts()
-        esi_character_contacts.setup_synced_character(
-            self.synced_character_2, self.CHARACTER_CONTACTS
+        character_id = (
+            self.synced_character_2.character_ownership.character.character_id
         )
+        esi_character_contacts = EsiCharacterContacts()
+        esi_character_contacts.setup_contacts(character_id, self.CHARACTER_CONTACTS)
         # when
         result = self._run_sync(
             mock_esi, mock_Token, self.synced_character_2, esi_character_contacts
@@ -514,13 +605,13 @@ class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
         self.assertTrue(result)
         self.assertEqual(self.synced_character_2.last_error, SyncedCharacter.Error.NONE)
         expected = {
-            1014: {"contact_id": 1014, "contact_type": "character", "standing": -10.0},
-            2011: {"contact_id": 2011, "contact_type": "corporation", "standing": 5.0},
-            3011: {"contact_id": 3011, "contact_type": "alliance", "standing": -10.0},
-            3013: {"contact_id": 3013, "contact_type": "alliance", "standing": -10.0},
+            EsiContact(1014, EsiContact.ContactType.CHARACTER, standing=-10.0),
+            EsiContact(2011, EsiContact.ContactType.CORPORATION, standing=5.0),
+            EsiContact(3011, EsiContact.ContactType.ALLIANCE, standing=-10.0),
+            EsiContact(3013, EsiContact.ContactType.ALLIANCE, standing=-10.0),
         }
-        self.assertDictEqual(
-            esi_character_contacts.synced_character_contacts(self.synced_character_2),
+        self.assertSetEqual(
+            set(esi_character_contacts.contacts(character_id)),
             expected,
         )
 
