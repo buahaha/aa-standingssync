@@ -2,7 +2,15 @@
 
 This is a plugin app for [Alliance Auth](https://gitlab.com/allianceauth/allianceauth), which enables non-alliance characters like scout alts to have the same standings view in game as their alliance main.
 
-![release](https://img.shields.io/pypi/v/aa-standingssync?label=release) ![python](https://img.shields.io/pypi/pyversions/aa-standingssync) ![django](https://img.shields.io/pypi/djversions/aa-standingssync?label=django) ![pipeline](https://gitlab.com/ErikKalkoken/aa-standingssync/badges/master/pipeline.svg) ![coverage](https://gitlab.com/ErikKalkoken/aa-standingssync/badges/master/coverage.svg) ![license](https://img.shields.io/badge/license-MIT-green)
+[![release](https://img.shields.io/pypi/v/aa-standingssync?label=release)](https://pypi.org/project/aa-standingssync/)
+[![python](https://img.shields.io/pypi/pyversions/aa-standingssync)](https://pypi.org/project/aa-standingssync/)
+[![django](https://img.shields.io/pypi/djversions/aa-standingssync?label=django)](https://pypi.org/project/aa-standingssync/)
+[![pipeline](https://gitlab.com/ErikKalkoken/aa-standingssync/badges/master/pipeline.svg)](https://gitlab.com/ErikKalkoken/aa-standingssync/-/pipelines)
+[![codecov](https://codecov.io/gl/ErikKalkoken/aa-standingssync/branch/master/graph/badge.svg?token=gHBi42fbSs)](https://codecov.io/gl/ErikKalkoken/aa-standingssync)
+[![license](https://img.shields.io/badge/license-MIT-green)](https://gitlab.com/ErikKalkoken/aa-standingssync/-/blob/master/LICENSE)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![chat](https://img.shields.io/discord/790364535294132234)](https://discord.gg/zmh52wnfvM)
 
 ## Content
 
