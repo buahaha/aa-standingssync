@@ -5,6 +5,8 @@ from django.test import TestCase
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.tests.auth_utils import AuthUtils
 
+from app_utils.testing import NoSocketsTestCase, generate_invalid_pk
+
 from . import (
     create_test_user,
     LoadTestDataMixin,
@@ -13,7 +15,6 @@ from . import (
 )
 from .. import tasks
 from ..models import SyncManager, SyncedCharacter, EveContact, EveEntity
-from ..utils import NoSocketsTestCase, generate_invalid_pk
 
 
 TASKS_PATH = "standingssync.tasks"

@@ -2,12 +2,12 @@ from celery import shared_task
 
 from allianceauth.services.hooks import get_extension_logger
 
-from . import __title__
+from app_utils.logging import LoggerAddTag
 
+from . import __title__
 from .helpers import is_esi_online
 from .models import SyncManager, SyncedCharacter, EveWar
 from .providers import esi
-from .utils import LoggerAddTag
 
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [1.2.0b2] - 2021-01-24
+## [1.2.0] - tbd
 
 ### Added
 
@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Remove support for Django 2
 - UI refresh
+- Migrated to allianceauth-app-utils
+- Codecov integration
 
 ## [1.1.4] - 2020-10-09
 

@@ -3,8 +3,10 @@ import copy
 import datetime as dt
 from unittest.mock import patch, Mock
 
+from django.test import TestCase
 from django.utils.timezone import now
 
+from app_utils.testing import NoSocketsTestCase
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 
@@ -26,7 +28,6 @@ from ..models import (
     EveEntity,
     EveWar,
 )
-from ..utils import NoSocketsTestCase
 
 
 MODELS_PATH = "standingssync.models"
@@ -471,7 +472,7 @@ class EsiCharacterContacts:
 
 
 @patch(MODELS_PATH + ".STANDINGSSYNC_WAR_TARGETS_LABEL_NAME", "WAR TARGETS")
-class TestSyncCharacter(LoadTestDataMixin, NoSocketsTestCase):
+class TestSyncCharacter(LoadTestDataMixin, TestCase):
     CHARACTER_CONTACTS = [
         EsiContact(1014, EsiContact.ContactType.CHARACTER, standing=10.0),
         EsiContact(2011, EsiContact.ContactType.CORPORATION, standing=5.0),

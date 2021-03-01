@@ -5,9 +5,10 @@ from django.utils.timezone import now
 
 from allianceauth.services.hooks import get_extension_logger
 
+from app_utils.logging import LoggerAddTag
+
 from . import __title__
 from .providers import esi
-from .utils import LoggerAddTag
 
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)

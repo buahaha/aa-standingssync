@@ -1,4 +1,4 @@
-from .utils import clean_setting
+from app_utils.django import clean_setting
 
 
 # minimum standing a character needs to have in order to get alliance contacts

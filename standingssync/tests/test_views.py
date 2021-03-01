@@ -9,11 +9,11 @@ from allianceauth.eveonline.models import EveCharacter
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.tests.auth_utils import AuthUtils
 
+from app_utils.testing import NoSocketsTestCase
 from esi.models import Token
 
 from . import create_test_user, LoadTestDataMixin, ALLIANCE_CONTACTS
 from ..models import SyncManager, SyncedCharacter, EveContact, EveEntity
-from ..utils import NoSocketsTestCase
 from .. import views
 
 

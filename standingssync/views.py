@@ -8,6 +8,10 @@ from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveCharacter, EveAllianceInfo
 from allianceauth.services.hooks import get_extension_logger
 
+from app_utils.logging import LoggerAddTag
+from app_utils.messages import messages_plus
+from app_utils.views import link_html
+
 from . import tasks, __title__
 from .app_settings import (
     STANDINGSSYNC_CHAR_MIN_STANDING,
@@ -16,7 +20,6 @@ from .app_settings import (
     STANDINGSSYNC_WAR_TARGETS_LABEL_NAME,
 )
 from .models import SyncManager, SyncedCharacter
-from .utils import LoggerAddTag, messages_plus, create_link_html
 
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -37,7 +40,7 @@ def create_icon_plus_name_html(
     text: str = None,
 ) -> str:
     """create HTML to display an icon next to a name. Can also be a link."""
-    name_html = create_link_html(url, name, new_window=False) if url else name
+    name_html = link_html(url, name, new_window=False) if url else name
     if text:
         name_html = format_html("{}&nbsp;{}", name_html, text)
 

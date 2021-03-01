@@ -6,6 +6,8 @@ from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 
+from app_utils.logging import LoggerAddTag
+from app_utils.helpers import chunks
 from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
 
@@ -27,7 +29,6 @@ from .managers import (
     EveWarManager,
 )
 from .providers import esi
-from .utils import LoggerAddTag, chunks
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 

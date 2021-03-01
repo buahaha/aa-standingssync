@@ -39,12 +39,5 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     ],
     python_requires=">=3.6",
-    install_requires=[
-        "allianceauth>=2.8.0",
-    ],
-    extras_require={
-        "testing": [
-            "django-webtest",
-        ]
-    },
+    install_requires=["allianceauth>=2.8.0", "allianceauth-app-utils>=1.0"],
 )
