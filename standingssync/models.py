@@ -37,6 +37,10 @@ class _SyncBaseModel(models.Model):
     class Meta:
         abstract = True
 
+    @property
+    def is_sync_ok(self) -> bool:
+        return self.last_error == self.Error.NONE
+
     def set_sync_status(self, status: int) -> None:
         """sets the sync status with the current date and time"""
         self.last_error = status

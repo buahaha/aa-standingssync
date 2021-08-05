@@ -146,6 +146,32 @@ class TestSyncManager(LoadTestDataMixin, NoSocketsTestCase):
             character=cls.character_4, owner_hash="x4", user=cls.user_2
         )
 
+    def test_should_report_no_sync_error(self):
+        # given
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
+        )
+        sync_manager.set_sync_status(SyncManager.Error.NONE)
+        # when/then
+        self.assertTrue(sync_manager.is_sync_ok)
+
+    def test_should_report_sync_error(self):
+        # given
+        sync_manager = SyncManager.objects.create(
+            alliance=self.alliance_1, character_ownership=self.main_ownership_1
+        )
+        for status in [
+            SyncManager.Error.TOKEN_INVALID,
+            SyncManager.Error.TOKEN_EXPIRED,
+            SyncManager.Error.INSUFFICIENT_PERMISSIONS,
+            SyncManager.Error.NO_CHARACTER,
+            SyncManager.Error.ESI_UNAVAILABLE,
+            SyncManager.Error.UNKNOWN,
+        ]:
+            sync_manager.set_sync_status(status)
+            # when/then
+            self.assertFalse(sync_manager.is_sync_ok)
+
     def test_set_sync_status(self):
         sync_manager = SyncManager.objects.create(
             alliance=self.alliance_1, character_ownership=self.main_ownership_1
@@ -476,6 +502,37 @@ class TestSyncCharacter(LoadTestDataMixin, TestCase):
 
         # 1 user with 1 alt character
         cls.user_1 = create_test_user(cls.character_1)
+        cls.alt_ownership_2 = CharacterOwnership.objects.create(
+            character=cls.character_2, owner_hash="x2", user=cls.user_1
+        )
+        cls.main_ownership_1 = CharacterOwnership.objects.get(
+            character=cls.character_1, user=cls.user_1
+        )
+        cls.alt_ownership_3 = CharacterOwnership.objects.create(
+            character=cls.character_3, owner_hash="x3", user=cls.user_1
+        )
+        cls.sync_manager = SyncManager.objects.create(
+            alliance=cls.alliance_1,
+            character_ownership=cls.main_ownership_1,
+            version_hash="new",
+        )
+        # sync manager with contacts
+        cls.sync_manager.contacts.all().delete()
+        for contact in ALLIANCE_CONTACTS:
+            EveContact.objects.create(
+                manager=cls.sync_manager,
+                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
+                standing=contact["standing"],
+                is_war_target=False,
+            )
+        # set to contacts as war targets
+        cls.sync_manager.contacts.filter(eve_entity_id__in=[1014, 3013]).update(
+            is_war_target=True, standing=-10.0
+        )
+        cls.alliance_contacts = [
+            cls.eve_contact_2_esi_contact(obj)
+            for obj in cls.sync_manager.contacts.all()
+        ]
 
     @staticmethod
     def eve_contact_2_esi_contact(eve_contact):
@@ -492,43 +549,31 @@ class TestSyncCharacter(LoadTestDataMixin, TestCase):
 
     def setUp(self) -> None:
         self.maxDiff = None
-        self.main_ownership_1 = CharacterOwnership.objects.get(
-            character=self.character_1, user=self.user_1
-        )
-        self.alt_ownership_2 = CharacterOwnership.objects.create(
-            character=self.character_2, owner_hash="x2", user=self.user_1
-        )
-        self.alt_ownership_3 = CharacterOwnership.objects.create(
-            character=self.character_3, owner_hash="x3", user=self.user_1
-        )
-        # sync manager with contacts
-        self.sync_manager = SyncManager.objects.create(
-            alliance=self.alliance_1,
-            character_ownership=self.main_ownership_1,
-            version_hash="new",
-        )
-        self.sync_manager.contacts.all().delete()
-        for contact in ALLIANCE_CONTACTS:
-            EveContact.objects.create(
-                manager=self.sync_manager,
-                eve_entity=EveEntity.objects.get(id=contact["contact_id"]),
-                standing=contact["standing"],
-                is_war_target=False,
-            )
-        # set to contacts as war targets
-        self.sync_manager.contacts.filter(eve_entity_id__in=[1014, 3013]).update(
-            is_war_target=True, standing=-10.0
-        )
-        self.alliance_contacts = [
-            self.eve_contact_2_esi_contact(obj)
-            for obj in self.sync_manager.contacts.all()
-        ]
         self.synced_character_2 = SyncedCharacter.objects.create(
             character_ownership=self.alt_ownership_2, manager=self.sync_manager
         )
         self.synced_character_3 = SyncedCharacter.objects.create(
             character_ownership=self.alt_ownership_3, manager=self.sync_manager
         )
+
+    def test_should_report_no_sync_error(self):
+        # given
+        self.synced_character_2.set_sync_status(SyncManager.Error.NONE)
+        # when/then
+        self.assertTrue(self.synced_character_2.is_sync_ok)
+
+    def test_should_report_sync_error(self):
+        # given
+        for status in [
+            SyncedCharacter.Error.TOKEN_INVALID,
+            SyncedCharacter.Error.TOKEN_EXPIRED,
+            SyncedCharacter.Error.INSUFFICIENT_PERMISSIONS,
+            SyncedCharacter.Error.ESI_UNAVAILABLE,
+            SyncedCharacter.Error.UNKNOWN,
+        ]:
+            self.synced_character_2.set_sync_status(status)
+            # when/then
+            self.assertFalse(self.synced_character_2.is_sync_ok)
 
     def test_get_last_error_message_after_sync(self):
         self.synced_character_2.last_sync = now()
