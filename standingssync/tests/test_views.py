@@ -4,18 +4,16 @@ from django.contrib.auth.models import User
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
-
-from allianceauth.eveonline.models import EveCharacter
-from allianceauth.authentication.models import CharacterOwnership
-from allianceauth.tests.auth_utils import AuthUtils
-
-from app_utils.testing import NoSocketsTestCase
 from esi.models import Token
 
-from . import create_test_user, LoadTestDataMixin, ALLIANCE_CONTACTS
-from ..models import SyncManager, SyncedCharacter, EveContact, EveEntity
-from .. import views
+from allianceauth.authentication.models import CharacterOwnership
+from allianceauth.eveonline.models import EveCharacter
+from allianceauth.tests.auth_utils import AuthUtils
+from app_utils.testing import NoSocketsTestCase
 
+from .. import views
+from ..models import EveContact, EveEntity, SyncedCharacter, SyncManager
+from . import ALLIANCE_CONTACTS, LoadTestDataMixin, create_test_user
 
 MODULE_PATH = "standingssync.views"
 

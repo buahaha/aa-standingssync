@@ -1,6 +1,7 @@
 from django.contrib import admin
-from .models import SyncedCharacter, SyncManager
+
 from . import tasks
+from .models import SyncedCharacter, SyncManager
 
 
 @admin.register(SyncedCharacter)

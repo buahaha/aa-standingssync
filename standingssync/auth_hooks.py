@@ -1,13 +1,13 @@
 from django.utils.translation import ugettext_lazy as _
 
-from allianceauth.services.hooks import MenuItemHook, UrlHook
 from allianceauth import hooks
+from allianceauth.services.hooks import MenuItemHook, UrlHook
 
-from . import urls, __title__
+from . import __title__, urls
 
 
 class standingssyncMenuItem(MenuItemHook):
-    """ This class ensures only authorized users will see the menu entry """
+    """This class ensures only authorized users will see the menu entry"""
 
     def __init__(self):
         # setup menu entry for sidebar

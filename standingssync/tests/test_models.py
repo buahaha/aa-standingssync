@@ -1,34 +1,25 @@
-from enum import Enum
 import copy
 import datetime as dt
-from unittest.mock import patch, Mock
+from enum import Enum
+from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from django.utils.timezone import now
-
-from app_utils.testing import NoSocketsTestCase
-from esi.models import Token
 from esi.errors import TokenExpiredError, TokenInvalidError
+from esi.models import Token
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveCharacter
 from allianceauth.tests.auth_utils import AuthUtils
+from app_utils.testing import NoSocketsTestCase
 
-
+from ..models import EveContact, EveEntity, EveWar, SyncedCharacter, SyncManager
 from . import (
-    LoadTestDataMixin,
-    create_test_user,
     ALLIANCE_CONTACTS,
     BravadoOperationStub,
+    LoadTestDataMixin,
+    create_test_user,
 )
-from ..models import (
-    SyncManager,
-    EveContact,
-    SyncedCharacter,
-    EveEntity,
-    EveWar,
-)
-
 
 MODELS_PATH = "standingssync.models"
 MANAGERS_PATH = "standingssync.managers"

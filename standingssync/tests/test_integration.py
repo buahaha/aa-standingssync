@@ -1,9 +1,8 @@
-from allianceauth.authentication.models import CharacterOwnership
-
 from django_webtest import WebTest
 
-from . import create_test_user, LoadTestDataMixin
+from allianceauth.authentication.models import CharacterOwnership
 
+from . import LoadTestDataMixin, create_test_user
 
 MODULE_PATH = "standingssync.views"
 

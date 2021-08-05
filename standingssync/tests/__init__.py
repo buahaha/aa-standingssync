@@ -4,11 +4,12 @@ from django.contrib.auth.models import User
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import (
+    EveAllianceInfo,
     EveCharacter,
     EveCorporationInfo,
-    EveAllianceInfo,
 )
 from allianceauth.tests.auth_utils import AuthUtils
+
 from ..models import EveEntity
 
 

@@ -1,15 +1,13 @@
-from typing import Tuple, List
+from typing import List, Tuple
 
 from django.db import models
 from django.utils.timezone import now
 
 from allianceauth.services.hooks import get_extension_logger
-
 from app_utils.logging import LoggerAddTag
 
 from . import __title__
 from .providers import esi
-
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 

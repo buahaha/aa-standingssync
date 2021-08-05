@@ -3,31 +3,26 @@ import json
 from typing import Optional
 
 from django.db import models, transaction
-from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
-
-from app_utils.logging import LoggerAddTag
-from app_utils.helpers import chunks
-from esi.models import Token
+from django.utils.translation import gettext_lazy as _
 from esi.errors import TokenExpiredError, TokenInvalidError
+from esi.models import Token
 
 from allianceauth.authentication.models import CharacterOwnership
 from allianceauth.eveonline.models import EveAllianceInfo, EveCharacter
 from allianceauth.notifications import notify
 from allianceauth.services.hooks import get_extension_logger
+from app_utils.helpers import chunks
+from app_utils.logging import LoggerAddTag
 
 from . import __title__
 from .app_settings import (
-    STANDINGSSYNC_CHAR_MIN_STANDING,
     STANDINGSSYNC_ADD_WAR_TARGETS,
+    STANDINGSSYNC_CHAR_MIN_STANDING,
     STANDINGSSYNC_REPLACE_CONTACTS,
     STANDINGSSYNC_WAR_TARGETS_LABEL_NAME,
 )
-from .managers import (
-    EveContactManager,
-    EveEntityManager,
-    EveWarManager,
-)
+from .managers import EveContactManager, EveEntityManager, EveWarManager
 from .providers import esi
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)

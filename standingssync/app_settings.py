@@ -1,6 +1,5 @@
 from app_utils.django import clean_setting
 
-
 # minimum standing a character needs to have in order to get alliance contacts
 # Any char with a standing smaller than this value will be rejected
 STANDINGSSYNC_CHAR_MIN_STANDING = clean_setting(
