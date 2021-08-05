@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [1.2.0] - tbd
+## [1.2.0] - 2021-08-05
+
+### Added
+
+- Status indicator for sync ok on admin site for both managers and characters
+
+## [1.2.0b4] - 2021-03-01
 
 ### Added
 
